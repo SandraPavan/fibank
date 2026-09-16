@@ -1,0 +1,16 @@
+{
+  "name": "@finbank/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint src test",
+    "test": "vitest run --reporter=default --reporter=junit --outputFile.junit=../../reports/unit/contracts.xml",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "vitest": "3.2.7"
+  }
+}

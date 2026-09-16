@@ -1,0 +1,96 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "darwin-arm64"]
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum PixState {
+  DRAFT
+  AUTH_PENDING
+  PROCESSING
+  APPROVED
+  REVIEW
+  REJECTED
+  FAILED
+}
+
+type RecipientSnapshot {
+  recipientId    String
+  name           String
+  pixKeyMasked   String
+  documentMasked String
+  institution    String
+}
+
+model LocalProfile {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  profileId   String   @unique
+  displayName String
+  account     Account?
+}
+
+model Account {
+  id                      String       @id @default(auto()) @map("_id") @db.ObjectId
+  accountId               String       @unique
+  profileId               String       @unique
+  profile                 LocalProfile @relation(fields: [profileId], references: [profileId])
+  ownerName               String
+  documentMasked          String
+  balanceCents            Int
+  dailyLimitCents         Int
+  transactionPasswordHash String
+  knownDeviceIds          String[]
+}
+
+model Recipient {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  recipientId    String   @unique
+  pixKeyHash     String
+  pixKeyMasked   String
+  name           String
+  documentMasked String
+  institution    String
+  createdAt      DateTime
+
+  @@index([pixKeyHash])
+}
+
+model PixIntent {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  intentId    String   @unique
+  requestId   String
+  accountId   String
+  recipientId String
+  amountCents Int
+  description String
+  deviceId    String
+  state       PixState @default(DRAFT)
+  createdAt   DateTime
+  expiresAt   DateTime
+
+  @@index([accountId, requestId])
+}
+
+model Transaction {
+  id                String            @id @default(auto()) @map("_id") @db.ObjectId
+  transactionId     String            @unique
+  requestId         String
+  accountId         String
+  recipientSnapshot RecipientSnapshot
+  amountCents       Int
+  description       String
+  deviceId          String
+  status            PixState
+  riskScore         Int?
+  reasonCodes       String[]
+  createdAt         DateTime
+  updatedAt         DateTime
+  processedAt       DateTime?
+
+  @@index([accountId, createdAt])
+  @@index([requestId])
+}

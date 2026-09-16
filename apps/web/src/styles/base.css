@@ -1,0 +1,51 @@
+/**
+ * Estilos base (DEV-030).
+ *
+ * Sem dependência de CDN: a família Inter é declarada com fallback de
+ * fontes de sistema porque o workshop precisa funcionar offline
+ * (dev/01-escopo-e-principios.md, princípio 7) e nenhum arquivo de fonte
+ * local está disponível neste incremento.
+ */
+
+@import './tokens.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family-base);
+  font-size: var(--font-body-md-size);
+  line-height: var(--font-body-md-line);
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 600;
+}
+
+p {
+  margin: 0;
+}
+
+button {
+  font-family: inherit;
+}
+
+a {
+  color: inherit;
+}

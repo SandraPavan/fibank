@@ -1,0 +1,82 @@
+/**
+ * Tokens do design system (DEV-030).
+ *
+ * Valores extraídos de stitch_finbank_pix_seguro/lumina_finance/DESIGN.md.
+ * Onde a seção "Brand & Style" (paleta prática, usada nos componentes)
+ * diverge dos tokens Material brutos do front-matter, a seção prática
+ * prevalece por ser a que descreve botões, cards, sidebar e indicadores
+ * de status.
+ */
+
+:root {
+  /* Cores */
+  --color-primary: #0a2540;
+  --color-on-primary: #ffffff;
+  --color-success: #22c55e;
+  --color-success-bg: #f0fdf4;
+  --color-warning: #f59e0b;
+  --color-warning-bg: #fffbeb;
+  --color-error: #ef4444;
+  --color-error-bg: #fef2f2;
+
+  --color-surface: #f8fafc;
+  --color-surface-card: #ffffff;
+  --color-border: #e2e8f0;
+  --color-input-border: #cbd5e1;
+
+  --color-text: #0b1c30;
+  --color-text-secondary: #43474d;
+  --color-text-on-primary: #eaf1ff;
+
+  /* Tipografia */
+  --font-family-base:
+    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
+
+  --font-headline-lg-size: 2rem;
+  --font-headline-lg-weight: 600;
+  --font-headline-lg-line: 2.5rem;
+
+  --font-headline-md-size: 1.5rem;
+  --font-headline-md-weight: 600;
+  --font-headline-md-line: 2rem;
+
+  --font-headline-sm-size: 1.25rem;
+  --font-headline-sm-weight: 600;
+  --font-headline-sm-line: 1.75rem;
+
+  --font-body-lg-size: 1.125rem;
+  --font-body-lg-weight: 400;
+  --font-body-lg-line: 1.75rem;
+
+  --font-body-md-size: 1rem;
+  --font-body-md-weight: 400;
+  --font-body-md-line: 1.5rem;
+
+  --font-body-sm-size: 0.875rem;
+  --font-body-sm-weight: 400;
+  --font-body-sm-line: 1.25rem;
+
+  --font-label-md-size: 0.75rem;
+  --font-label-md-weight: 600;
+  --font-label-md-line: 1rem;
+  --font-label-md-spacing: 0.05em;
+
+  /* Raio */
+  --radius-input: 0.25rem;
+  --radius-card: 0.5rem;
+  --radius-pill: 0.75rem;
+
+  /* Espaçamento */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2.5rem;
+  --spacing-gutter: 1.5rem;
+  --spacing-mobile-margin: 1rem;
+
+  /* Layout */
+  --sidebar-width: 280px;
+  --container-max: 1280px;
+}

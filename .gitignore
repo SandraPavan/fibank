@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+reports/
+apps/web/cypress/screenshots/
+apps/web/cypress/videos/
+apps/web/cypress/downloads/
+apps/api/dist
+apps/api/node_modules

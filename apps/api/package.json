@@ -1,0 +1,33 @@
+{
+  "name": "@finbank/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint src test",
+    "test": "vitest run --reporter=default --reporter=junit --outputFile.junit=../../reports/unit/api.xml",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prisma:generate": "prisma generate --schema prisma/schema.prisma",
+    "db:push": "prisma db push --schema prisma/schema.prisma --skip-generate",
+    "db:seed": "node dist/database/cli.js seed",
+    "db:reset": "node dist/database/cli.js reset",
+    "db:initialize": "node dist/database/cli.js initialize",
+    "test:integration": "vitest run --config vitest.integration.config.ts --reporter=default --reporter=junit --outputFile.junit=../../reports/docker/api-integration.xml",
+    "prebuild": "npm run build --workspace @finbank/contracts",
+    "pretypecheck": "npm run build --workspace @finbank/contracts"
+  },
+  "dependencies": {
+    "@nestjs/common": "11.2.3",
+    "@nestjs/core": "11.2.3",
+    "@nestjs/platform-express": "11.2.3",
+    "@prisma/client": "6.19.0",
+    "prisma": "6.19.0",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2",
+    "@finbank/contracts": "0.1.0"
+  },
+  "devDependencies": {
+    "pactum": "3.8.0",
+    "vitest": "3.2.7"
+  }
+}

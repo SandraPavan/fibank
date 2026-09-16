@@ -1,0 +1,24 @@
+services:
+  api:
+    environment:
+      DATABASE_URL: mongodb://mongo:27017/finbank_test?replicaSet=rs0
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+  web:
+    ports: !override
+      - '127.0.0.1::8080'
+    healthcheck:
+      interval: 1s
+      timeout: 3s
+      retries: 3
+      start_period: 0s
+
+networks:
+  backend:
+    name: '${FINBANK_NETWORK_NAME}'
+
+volumes:
+  mongo-data:
+    name: '${FINBANK_MONGO_VOLUME_NAME}'
+  mongo-config:
+    name: '${FINBANK_MONGO_CONFIG_VOLUME_NAME}'

@@ -1,0 +1,44 @@
+{
+  "name": "finbank",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": "24.15.0",
+    "npm": "11.9.0"
+  },
+  "packageManager": "npm@11.9.0",
+  "workspaces": [
+    "apps/api",
+    "apps/web",
+    "packages/contracts"
+  ],
+  "scripts": {
+    "format:check": "prettier --check .",
+    "lint": "eslint eslint.config.mjs scripts test facilitator && npm run lint --workspaces",
+    "typecheck": "npm run typecheck --workspaces",
+    "test": "node scripts/test-reports.mjs unit",
+    "test:docker": "node scripts/test-reports.mjs docker",
+    "test:workshop-risks": "vitest run --config facilitator/vitest.config.ts characterization",
+    "test:workshop-risks:target": "vitest run --config facilitator/vitest.config.ts target",
+    "build": "npm run build --workspaces",
+    "workshop:start": "node scripts/workshop.mjs start",
+    "workshop:status": "node scripts/workshop.mjs status",
+    "workshop:reset": "node scripts/workshop.mjs reset",
+    "workshop:stop": "node scripts/workshop.mjs stop"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.3.0",
+    "eslint": "10.9.1",
+    "eslint-plugin-vue": "10.10.0",
+    "globals": "17.12.0",
+    "pactum": "3.8.0",
+    "prettier": "3.6.2",
+    "typescript": "5.9.2",
+    "typescript-eslint": "8.69.0",
+    "vitest": "3.2.7"
+  },
+  "allowScripts": {
+    "cypress@16.1.0": true
+  }
+}

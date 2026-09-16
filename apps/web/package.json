@@ -1,0 +1,31 @@
+{
+  "name": "@finbank/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vue-tsc --noEmit && vite build",
+    "lint": "eslint src test cypress vite.config.ts cypress.config.ts",
+    "test": "vitest run --reporter=default --reporter=junit --outputFile.junit=../../reports/unit/web.xml",
+    "test:e2e": "cypress run",
+    "typecheck": "vue-tsc --noEmit",
+    "prebuild": "npm run build --workspace @finbank/contracts",
+    "pretypecheck": "npm run build --workspace @finbank/contracts",
+    "pretest": "npm run build --workspace @finbank/contracts"
+  },
+  "dependencies": {
+    "@finbank/contracts": "0.1.0",
+    "pinia": "3.0.3",
+    "vue": "3.5.21",
+    "vue-router": "4.5.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "6.0.1",
+    "@vue/test-utils": "2.5.0",
+    "cypress": "16.1.0",
+    "jsdom": "29.0.0",
+    "vite": "7.3.6",
+    "vitest": "3.2.7",
+    "vue-tsc": "3.0.6"
+  }
+}
