@@ -1,0 +1,65 @@
+name: Facilitator diagnostics
+
+# Disparo manual apenas — nunca em pull_request/push. Roda os riscos
+# didáticos RISK-01–06 (dev/05-controle-didatico.md) contra o baseline
+# real: `characterization` deve ficar verde (prova o incidente);
+# `target` falha por desenho (descreve a correção pós-G5, ainda não
+# implementada). Diagnóstico do workshop para o facilitador/mantenedor,
+# nunca required check da branch do participante
+# (dev/08-docker-e-pipeline.md).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  workshop-risks:
+    name: RISK-01..06 (characterization + target)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Sem setup-node/npm ci aqui: todo o npm/node usado neste job roda
+      # dentro do container (`docker run ... npm run test:workshop-risks`),
+      # nada no runner precisa de Node diretamente.
+      - run: docker compose up -d --wait mongo mongo-init
+      - run: docker build --target build -f apps/api/Dockerfile -t finbank-ci-facilitator .
+
+      - name: characterization — deve ficar verde (prova o incidente)
+        run: |
+          docker run --rm \
+            --network finbank_backend \
+            -v "${{ github.workspace }}/facilitator:/app/facilitator" \
+            -e DATABASE_URL="mongodb://mongo:27017/finbank_test?replicaSet=rs0" \
+            -e WORKSHOP_MODE=true \
+            finbank-ci-facilitator \
+            npm run test:workshop-risks
+
+      # Falha por desenho no baseline (dev/06-estrategia-de-testes.md) —
+      # não é required check em lugar nenhum; continue-on-error só existe
+      # aqui, nunca em ci.yml.
+      - name: target — falha esperada até o G5 (descreve a correção)
+        continue-on-error: true
+        run: |
+          docker run --rm \
+            --network finbank_backend \
+            -v "${{ github.workspace }}/facilitator:/app/facilitator" \
+            -e DATABASE_URL="mongodb://mongo:27017/finbank_test?replicaSet=rs0" \
+            -e WORKSHOP_MODE=true \
+            finbank-ci-facilitator \
+            npm run test:workshop-risks:target
+
+      - if: always()
+        run: docker compose down --volumes
+
+      - if: always()
+        run: |
+          {
+            echo "### Diagnóstico do workshop (RISK-01–06)"
+            echo "\`characterization\` acima precisa estar verde — cada risco"
+            echo "provado contra o código real de hoje."
+            echo "\`target\` acima **falha por desenho**: descreve a correção"
+            echo "esperada de DEV-100–103 (G5), ainda bloqueada. Isso não é"
+            echo "um required check e nunca deve travar a branch do"
+            echo "participante."
+          } >> "$GITHUB_STEP_SUMMARY"
