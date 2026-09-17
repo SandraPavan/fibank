@@ -3,11 +3,14 @@ import type { PixConfirmationResponse } from '@finbank/contracts';
 import {
   DomainRepository,
   PERSISTENCE_RUNTIME,
+  RequestIdConflict,
   SIMULATION_LATENCY,
   noopLatency,
   type PersistenceRuntime,
   type SimulationLatency,
 } from '../repositories/domain.repository';
+import type { Transaction } from '../repositories/models';
+import { retryUntilFound } from './replay-retry';
 import { PixRiskEvaluator } from './pix-risk.domain';
 import { ApiProblem } from '../http/problem';
 import { DEFAULT_WORKSPACE_ID } from '../workspace/workspace-context';
@@ -18,6 +21,24 @@ import {
   validateConfirmable,
   validateConfirmationInput,
 } from './pix-confirmation.domain';
+
+/**
+ * DEV-100 (RF-05/CT33): repetir a mesma confirmação (mesmo `requestId`)
+ * devolve o resultado já persistido em vez de reprocessar.
+ */
+function confirmationResponse(
+  transaction: Transaction,
+): PixConfirmationResponse {
+  return {
+    requestId: transaction.requestId,
+    transactionId: transaction.transactionId,
+    status: transaction.status as 'APPROVED' | 'REVIEW',
+    reasonCodes: transaction.reasonCodes,
+    processedAt: (
+      transaction.processedAt ?? transaction.updatedAt
+    ).toISOString(),
+  };
+}
 
 @Injectable()
 export class PixConfirmationService {
@@ -46,6 +67,11 @@ export class PixConfirmationService {
           input.transactionPassword,
           account.transactionPasswordHash,
         );
+        const replay = await unit.transactionByRequestId(
+          account.accountId,
+          requestId,
+        );
+        if (replay) return confirmationResponse(replay);
         const now = this.runtime.now();
         validateConfirmable(intent, now);
         const recipient = await unit.recipient(intent.recipientId);
@@ -100,13 +126,27 @@ export class PixConfirmationService {
         };
       }, workspaceId);
     } catch (error) {
-      if (
+      const winner =
+        error instanceof RequestIdConflict
+          ? await this.repository.account(profileId, workspaceId)
+          : null;
+      const replay =
+        winner &&
+        (await retryUntilFound(() =>
+          this.repository.transactionByRequestId(
+            winner.accountId,
+            requestId,
+            workspaceId,
+          ),
+        ));
+      if (replay) result = confirmationResponse(replay);
+      else if (
         error instanceof PixConfirmationError ||
         error instanceof PixIntentError
       )
         throw new ApiProblem(error.code);
-      if (error instanceof ApiProblem) throw error;
-      throw new ApiProblem('PROCESSING_ERROR');
+      else if (error instanceof ApiProblem) throw error;
+      else throw new ApiProblem('PROCESSING_ERROR');
     }
     // A API já terminou o processamento (débito e persistência da
     // transação) neste ponto; um atraso registrado via `SimulationModule`

@@ -95,7 +95,7 @@ model PixIntent {
   expiresAt   DateTime
 
   @@unique([workspaceId, intentId])
-  @@index([workspaceId, accountId, requestId])
+  @@unique([workspaceId, accountId, requestId])
 }
 
 model Transaction {
@@ -116,6 +116,6 @@ model Transaction {
   processedAt       DateTime?
 
   @@unique([workspaceId, transactionId])
+  @@unique([workspaceId, accountId, requestId])
   @@index([workspaceId, accountId, createdAt])
-  @@index([workspaceId, requestId])
 }

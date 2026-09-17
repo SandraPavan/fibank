@@ -51,12 +51,18 @@ export class PixIntentController {
     response.statusCode = result.status === 'REVIEW' ? 202 : 200;
     return result;
   }
-  @Post() create(@Req() request: IncomingMessage, @Body() body: unknown) {
-    return this.service.create(
+  @Post() async create(
+    @Req() request: IncomingMessage,
+    @Body() body: unknown,
+    @Res({ passthrough: true }) response: ServerResponse,
+  ) {
+    const result = await this.service.create(
       localProfileId(request.rawHeaders),
       body,
       workspaceIdFromRequest(request),
     );
+    response.statusCode = result.created ? 201 : 200;
+    return result.intent;
   }
   @Get(':requestId') get(
     @Req() request: IncomingMessage,

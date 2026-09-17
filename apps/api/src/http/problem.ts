@@ -53,6 +53,11 @@ const problems = {
     'Intenção não encontrada',
     'A intenção PIX não foi encontrada.',
   ],
+  REQUEST_ID_CONFLICT: [
+    409,
+    'Conflito de idempotência',
+    'O requestId já foi utilizado com um conteúdo diferente.',
+  ],
   PIX_INTENT_EXPIRED: [
     410,
     'Intenção expirada',

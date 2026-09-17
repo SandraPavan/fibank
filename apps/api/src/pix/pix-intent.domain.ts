@@ -11,7 +11,8 @@ export class PixIntentError extends Error {
       | 'INSUFFICIENT_BALANCE'
       | 'DAILY_LIMIT_EXCEEDED'
       | 'PIX_INTENT_EXPIRED'
-      | 'PIX_INTENT_NOT_EDITABLE',
+      | 'PIX_INTENT_NOT_EDITABLE'
+      | 'REQUEST_ID_CONFLICT',
   ) {
     super(code);
   }
@@ -103,6 +104,24 @@ export function validateFunds(
     .reduce((sum, tx) => sum + tx.amountCents, 0);
   if (approved + amountCents > account.dailyLimitCents)
     throw new PixIntentError('DAILY_LIMIT_EXCEEDED');
+}
+/**
+ * DEV-100 (RF-05/CT36): mesmo `requestId` com o mesmo conteúdo é uma
+ * repetição segura; conteúdo diferente é conflito de idempotência.
+ */
+export function matchesExistingIntent(
+  intent: Pick<
+    PixIntent,
+    'recipientId' | 'amountCents' | 'deviceId' | 'description'
+  >,
+  input: CreatePixIntentRequest,
+): boolean {
+  return (
+    intent.recipientId === input.recipientId &&
+    intent.amountCents === input.amountCents &&
+    intent.deviceId === input.deviceId &&
+    intent.description === (input.description ?? '')
+  );
 }
 export function validateEditable(intent: PixIntent, now: Date): void {
   if (now >= intent.expiresAt) throw new PixIntentError('PIX_INTENT_EXPIRED');

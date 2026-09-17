@@ -3,12 +3,15 @@ import type { PixIntentResponse } from '@finbank/contracts';
 import {
   DomainRepository,
   PERSISTENCE_RUNTIME,
+  RequestIdConflict,
   type PersistenceRuntime,
 } from '../repositories/domain.repository';
 import type { PixIntent } from '../repositories/models';
 import { ApiProblem } from '../http/problem';
 import { DEFAULT_WORKSPACE_ID } from '../workspace/workspace-context';
+import { retryUntilFound } from './replay-retry';
 import {
+  matchesExistingIntent,
   PixIntentError,
   validateEditable,
   validateFunds,
@@ -57,14 +60,30 @@ export class PixIntentService {
       throw error;
     }
   }
+  private replayOrConflict(
+    existing: PixIntent,
+    input: Parameters<typeof matchesExistingIntent>[1],
+  ): { intent: PixIntentResponse; created: boolean } {
+    if (!matchesExistingIntent(existing, input))
+      throw new PixIntentError('REQUEST_ID_CONFLICT');
+    return { intent: publicIntent(existing), created: false };
+  }
   async create(
     profileId: string,
     body: unknown,
     workspaceId: string = DEFAULT_WORKSPACE_ID,
-  ) {
+  ): Promise<{ intent: PixIntentResponse; created: boolean }> {
     return this.run(async () => {
       const input = validateIntentInput(body, false);
       const account = await this.account(profileId, workspaceId);
+      const existing = (
+        await this.repository.intents(
+          account.accountId,
+          input.requestId,
+          workspaceId,
+        )
+      )[0];
+      if (existing) return this.replayOrConflict(existing, input);
       if (!(await this.repository.recipient(input.recipientId, workspaceId)))
         throw new ApiProblem('RECIPIENT_NOT_FOUND');
       const now = this.runtime.now();
@@ -74,19 +93,35 @@ export class PixIntentService {
         await this.repository.transactions(account.accountId, workspaceId),
         now,
       );
-      return publicIntent(
-        await this.repository.createIntent(
-          {
-            ...input,
-            description: input.description ?? '',
-            accountId: account.accountId,
-            state: 'DRAFT',
-            createdAt: now,
-            expiresAt: new Date(now.getTime() + 300000),
-          },
-          workspaceId,
-        ),
-      );
+      try {
+        return {
+          intent: publicIntent(
+            await this.repository.createIntent(
+              {
+                ...input,
+                description: input.description ?? '',
+                accountId: account.accountId,
+                state: 'DRAFT',
+                createdAt: now,
+                expiresAt: new Date(now.getTime() + 300000),
+              },
+              workspaceId,
+            ),
+          ),
+          created: true,
+        };
+      } catch (error) {
+        // DEV-100 (RF-05/CT36): perdeu a corrida do índice único — o
+        // vencedor já existe; relê para decidir replay ou conflito.
+        if (!(error instanceof RequestIdConflict)) throw error;
+        const raced = await retryUntilFound(() =>
+          this.repository
+            .intents(account.accountId, input.requestId, workspaceId)
+            .then((rows) => rows[0] ?? null),
+        );
+        if (!raced) throw error;
+        return this.replayOrConflict(raced, input);
+      }
     });
   }
   async get(

@@ -197,6 +197,8 @@ it('mantém desempate entre páginas e limites exatos do dia civil', async () =>
         ...transactions[0]!,
         workspaceId: DEFAULT_WORKSPACE_ID,
         transactionId: transactionId!,
+        // DEV-100: `requestId` agora é único por conta.
+        requestId: `REQ-${transactionId!}`,
         createdAt: new Date(at!),
       },
     });

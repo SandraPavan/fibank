@@ -143,14 +143,24 @@ it('rejeita entradas e contexto sem qualquer mutação', async () => {
   problem(
     await spec()
       .post(base)
-      .withJson({ ...input, recipientId: 'REC-missing' }),
+      // DEV-100/CT36: requestId próprio para não colidir com o intent já
+      // existente de `input.requestId` (que devolveria REQUEST_ID_CONFLICT).
+      .withJson({
+        ...input,
+        requestId: 'REQ-create-missing-recipient',
+        recipientId: 'REC-missing',
+      }),
     404,
     'RECIPIENT_NOT_FOUND',
   );
   problem(
     await spec()
       .post(base)
-      .withJson({ ...input, amountCents: 14525001 }),
+      .withJson({
+        ...input,
+        requestId: 'REQ-create-over-balance',
+        amountCents: 14525001,
+      }),
     422,
     'INSUFFICIENT_BALANCE',
   );

@@ -154,7 +154,10 @@ it('confirma e persiste débito exato, snapshot mascarado e resultado antes da r
     'APPROVED',
   );
   const after = await snapshot();
-  problem(await confirm(), 409, 'PIX_INTENT_NOT_CONFIRMABLE');
+  // DEV-100/CT33: repetir a mesma confirmação devolve o resultado original,
+  // sem nova transação nem novo débito.
+  const replay = await confirm().expectStatus(200);
+  expect(replay.body).toEqual(response.body);
   expect(await snapshot()).toEqual(after);
 });
 it('rejeita senha, corpo, JSON e contexto sem mutação ou dados sensíveis', async () => {
@@ -328,8 +331,9 @@ it('limite inclusivo soma aprovações no dia de São Paulo e ignora outras cont
     [200, new Date('2026-08-18T03:00:00Z')],
     [500, new Date('2026-08-18T02:59:59.999Z')],
   ] as const)
+    // DEV-100: `requestId` agora é único por conta.
     await repo.createTransaction({
-      requestId: 'REQ-history',
+      requestId: `REQ-history-${amountCents}`,
       accountId,
       recipientSnapshot,
       amountCents,
@@ -388,7 +392,10 @@ it.each([499999, 500000, 500001])(
       status,
     );
     const after = await snapshot();
-    problem(await confirm(), 409, 'PIX_INTENT_NOT_CONFIRMABLE');
+    // DEV-100/CT33: retry (inclusive de REVIEW) devolve o resultado
+    // original com o mesmo status HTTP, sem reprocessar.
+    const replay = await confirm().expectStatus(review ? 202 : 200);
+    expect(replay.body).toEqual(response.body);
     expect(await snapshot()).toEqual(after);
   },
 );

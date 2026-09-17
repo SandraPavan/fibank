@@ -118,7 +118,10 @@ it('persiste os cinco modelos, isola contas e converge seed/reset no replica set
     processedAt: null,
   };
   const persisted = await repository.createTransaction(repeated);
-  await repository.createTransaction(repeated);
+  // DEV-100: `requestId` agora é único por conta, então a segunda escrita
+  // de teste (mesmos dados, propósito de gerar um segundo `transactionId`
+  // independente) precisa de um `requestId` distinto do primeiro.
+  await repository.createTransaction({ ...repeated, requestId: 'REQ-2002' });
   expect(
     await repository.transaction(
       first.account.accountId,

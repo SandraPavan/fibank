@@ -104,6 +104,7 @@ describe('PixConfirmationService — atraso de simulação (DEV-040)', () => {
         createdAt: now,
       }),
       transactions: async () => [],
+      transactionByRequestId: async () => null,
       state: async () => {},
       debit: async () => {},
       createTransaction: async () => {},

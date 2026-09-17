@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import type { TransactionQuery } from '../transactions/transaction-query.domain';
 import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
@@ -18,10 +18,48 @@ export interface ConfirmationUnit {
   intent(accountId: string, requestId: string): Promise<PixIntent | null>;
   recipient(recipientId: string): Promise<Recipient | null>;
   transactions(accountId: string): Promise<Transaction[]>;
+  transactionByRequestId(
+    accountId: string,
+    requestId: string,
+  ): Promise<Transaction | null>;
   state(intentId: string, state: PixIntent['state']): Promise<void>;
   debit(accountId: string, amountCents: number): Promise<void>;
   createTransaction(transaction: Transaction): Promise<void>;
 }
+
+/**
+ * DEV-100 (RF-05/CT34): sinaliza que uma confirmação concorrente já
+ * ocupou o índice único `[workspaceId, accountId, requestId]` de
+ * `Transaction`. Não carrega tipos do Prisma — mantém o chamador
+ * (`PixConfirmationService`) livre de `@prisma/client` (G2).
+ */
+export class RequestIdConflict extends Error {}
+function isRequestIdUniqueViolation(error: unknown): boolean {
+  if (
+    !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+    error.code !== 'P2002'
+  )
+    return false;
+  const target = error.meta?.target;
+  let fields: string[] = [];
+  if (Array.isArray(target)) fields = target;
+  else if (typeof target === 'string') fields = target.split(/[,_]/);
+  return fields.includes('requestId') && fields.includes('accountId');
+}
+/**
+ * DEV-100 (RF-05/CT34): no MongoDB, duas confirmações concorrentes para o
+ * mesmo `PixIntent` colidem primeiro como um "write conflict" (P2034) na
+ * própria transação interativa, antes mesmo de chegar ao índice único de
+ * `Transaction`. É o próprio Prisma quem recomenda repetir a transação
+ * quando isso acontece.
+ */
+function isWriteConflict(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2034'
+  );
+}
+const MAX_CONFIRMATION_ATTEMPTS = 5;
 
 export const PERSISTENCE_RUNTIME = Symbol('PERSISTENCE_RUNTIME');
 export interface PersistenceRuntime {
@@ -80,6 +118,21 @@ export class DomainRepository {
     action: (unit: ConfirmationUnit) => Promise<T>,
     workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<T> {
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return await this.runConfirmation(action, workspaceId);
+      } catch (error) {
+        if (isRequestIdUniqueViolation(error)) throw new RequestIdConflict();
+        if (!isWriteConflict(error) || attempt >= MAX_CONFIRMATION_ATTEMPTS)
+          throw error;
+      }
+    }
+  }
+
+  private async runConfirmation<T>(
+    action: (unit: ConfirmationUnit) => Promise<T>,
+    workspaceId: string,
+  ): Promise<T> {
     return this.db.$transaction(async (tx) =>
       action({
         account: async (profileId) => {
@@ -105,6 +158,18 @@ export class DomainRepository {
           (
             await tx.transaction.findMany({ where: { workspaceId, accountId } })
           ).map(withoutPhysicalId),
+        transactionByRequestId: async (accountId, requestId) => {
+          const row = await tx.transaction.findUnique({
+            where: {
+              workspaceId_accountId_requestId: {
+                workspaceId,
+                accountId,
+                requestId,
+              },
+            },
+          });
+          return row && withoutPhysicalId(row);
+        },
         state: async (intentId, state) => {
           await tx.pixIntent.update({
             where: { workspaceId_intentId: { workspaceId, intentId } },
@@ -247,16 +312,24 @@ export class DomainRepository {
     input: Omit<PixIntent, 'intentId' | 'createdAt'> & { createdAt?: Date },
     workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<PixIntent> {
-    return this.db.pixIntent
-      .create({
-        data: {
-          ...input,
-          workspaceId,
-          intentId: this.runtime.id('INT'),
-          createdAt: input.createdAt ?? this.runtime.now(),
-        },
-      })
-      .then(withoutPhysicalId);
+    try {
+      return await this.db.pixIntent
+        .create({
+          data: {
+            ...input,
+            workspaceId,
+            intentId: this.runtime.id('INT'),
+            createdAt: input.createdAt ?? this.runtime.now(),
+          },
+        })
+        .then(withoutPhysicalId);
+    } catch (error) {
+      // DEV-100 (RF-05/CT36): duas criações concorrentes com o mesmo
+      // requestId competem pelo índice único; a perdedora relê e decide
+      // replay-ou-conflito em `PixIntentService.create`.
+      if (isRequestIdUniqueViolation(error)) throw new RequestIdConflict();
+      throw error;
+    }
   }
   async intents(
     accountId: string,
@@ -361,6 +434,17 @@ export class DomainRepository {
   ): Promise<Transaction | null> {
     return this.db.transaction
       .findFirst({ where: { workspaceId, accountId, transactionId } })
+      .then((row) => row && withoutPhysicalId(row));
+  }
+  async transactionByRequestId(
+    accountId: string,
+    requestId: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<Transaction | null> {
+    return this.db.transaction
+      .findUnique({
+        where: { workspaceId_accountId_requestId: { workspaceId, accountId, requestId } },
+      })
       .then((row) => row && withoutPhysicalId(row));
   }
 }
