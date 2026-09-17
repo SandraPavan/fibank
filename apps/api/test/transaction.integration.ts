@@ -10,6 +10,7 @@ import { reset } from '../src/database/seed';
 import { transactions } from '../src/database/fixtures';
 import { DomainRepository } from '../src/repositories/domain.repository';
 import { PixRiskEvaluator } from '../src/pix/pix-risk.domain';
+import { DEFAULT_WORKSPACE_ID } from '../src/workspace/workspace-context';
 let app: INestApplication;
 let db: PrismaService;
 let repo: DomainRepository;
@@ -146,6 +147,7 @@ it('isola contagens e detalhes de contas e conserva snapshot quando destinatári
   await db.transaction.create({
     data: {
       ...transactions[0]!,
+      workspaceId: DEFAULT_WORKSPACE_ID,
       transactionId: 'TXN-other',
       accountId: account.accountId,
       recipientSnapshot: {
@@ -170,7 +172,12 @@ it('isola contagens e detalhes de contas e conserva snapshot quando destinatári
   }
   const before = (await spec().get(`${base}/TXN-1001`).expectStatus(200)).body;
   await db.recipient.update({
-    where: { recipientId: 'REC-1001' },
+    where: {
+      workspaceId_recipientId: {
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        recipientId: 'REC-1001',
+      },
+    },
     data: { name: 'Nome atualizado' },
   });
   expect((await spec().get(`${base}/TXN-1001`).expectStatus(200)).body).toEqual(
@@ -188,6 +195,7 @@ it('mantém desempate entre páginas e limites exatos do dia civil', async () =>
     await db.transaction.create({
       data: {
         ...transactions[0]!,
+        workspaceId: DEFAULT_WORKSPACE_ID,
         transactionId: transactionId!,
         createdAt: new Date(at!),
       },
@@ -271,14 +279,22 @@ function problemBody(body: unknown): Record<string, unknown> {
 
 it('não expõe estados internos fora do contrato de transação', async () => {
   const original = await db.transaction.findUniqueOrThrow({
-    where: { transactionId: 'TXN-1001' },
+    where: {
+      workspaceId_transactionId: {
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        transactionId: 'TXN-1001',
+      },
+    },
   });
+  const where = {
+    workspaceId_transactionId: {
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      transactionId: original.transactionId,
+    },
+  };
   try {
     for (const status of ['DRAFT', 'AUTH_PENDING', 'PROCESSING'] as const) {
-      await db.transaction.update({
-        where: { transactionId: original.transactionId },
-        data: { status },
-      });
+      await db.transaction.update({ where, data: { status } });
       for (const path of ['', '/TXN-1001']) {
         const response = await spec().get(`${base}${path}`).expectStatus(500);
         expect(problemBody(response.body).code).toBe('PROCESSING_ERROR');
@@ -286,9 +302,6 @@ it('não expõe estados internos fora do contrato de transação', async () => {
       }
     }
   } finally {
-    await db.transaction.update({
-      where: { transactionId: original.transactionId },
-      data: { status: original.status },
-    });
+    await db.transaction.update({ where, data: { status: original.status } });
   }
 });

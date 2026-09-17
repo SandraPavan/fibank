@@ -102,7 +102,7 @@ published_count="$(compose ps --format '{{range .Publishers}}{{println .Publishe
   fail "esperado somente um mapeamento publicado; encontrado: $published_count"
 
 compose run --rm --no-deps api \
-  node -e "Promise.all([fetch('http://host.docker.internal:$port/',{signal:AbortSignal.timeout(5000)}),fetch('http://host.docker.internal:$port/api/health',{signal:AbortSignal.timeout(5000)})]).then(async ([web,health])=>{const html=await web.text();if(!web.ok||!html.includes('<title>FinBank</title>')||!health.ok||JSON.stringify(await health.json())!=='{\"status\":\"ok\"}')process.exit(1)}).catch(()=>process.exit(1))"
+  node -e "Promise.all([fetch('http://host.docker.internal:$port/',{signal:AbortSignal.timeout(5000)}),fetch('http://host.docker.internal:$port/api/health',{signal:AbortSignal.timeout(5000)})]).then(async ([web,health])=>{const html=await web.text();if(!web.ok||!html.includes('<title>FinBank PIX Seguro</title>')||!health.ok||JSON.stringify(await health.json())!=='{\"status\":\"ok\"}')process.exit(1)}).catch(()=>process.exit(1))"
 
 compose exec -T mongo mongosh --quiet --eval \
   'db.getSiblingDB("dev002_smoke").sentinel.updateOne({_id: "preserved"}, {$set: {value: "ok"}}, {upsert: true})' >/dev/null
@@ -148,6 +148,9 @@ docker build --target build -f apps/api/Dockerfile -t "$project-integration" .
 docker run --rm --network "$network" \
   --mount "type=bind,source=$PWD/reports,target=/app/reports" \
   -e DATABASE_URL=mongodb://mongo:27017/finbank_test?replicaSet=rs0 \
+  -e WORKSHOP_MODE=true \
+  -e WORKSPACE_SESSION_KEY=local-workshop-key \
+  -e FACILITATOR_ACCESS_CODE=local-facilitator-code \
   "$project-integration" npm run test:integration --workspace @finbank/api
 
 compose stop api

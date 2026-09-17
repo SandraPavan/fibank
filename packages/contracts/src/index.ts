@@ -98,3 +98,11 @@ export interface TransactionPageResponse {
   totalItems: number;
   totalPages: number;
 }
+
+export interface JoinSessionRequest {
+  groupSlug: string;
+  code: string;
+}
+export interface JoinSessionResponse {
+  groupSlug: string;
+}

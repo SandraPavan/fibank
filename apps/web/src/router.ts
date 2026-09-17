@@ -3,6 +3,7 @@ import AppShell from './layouts/AppShell.vue';
 import ComprovanteView from './views/ComprovanteView.vue';
 import ErroView from './views/ErroView.vue';
 import HistoricoView from './views/HistoricoView.vue';
+import JoinView from './views/JoinView.vue';
 import LoginView from './views/LoginView.vue';
 import RevisarView from './views/RevisarView.vue';
 import SenhaView from './views/SenhaView.vue';
@@ -16,6 +17,7 @@ export function createFinBankRouter(
     routes: [
       { path: '/', redirect: '/login' },
       { path: '/login', name: 'login', component: LoginView },
+      { path: '/join/:groupSlug', name: 'join', component: JoinView },
       {
         path: '/app',
         component: AppShell,

@@ -6,6 +6,7 @@ import type {
 import { DomainRepository } from '../repositories/domain.repository';
 import type { Transaction } from '../repositories/models';
 import { ApiProblem } from '../http/problem';
+import { DEFAULT_WORKSPACE_ID } from '../workspace/workspace-context';
 import {
   TransactionQueryError,
   validateTransactionQuery,
@@ -43,14 +44,15 @@ export class TransactionService {
   constructor(
     @Inject(DomainRepository) private readonly repository: DomainRepository,
   ) {}
-  private async account(profileId: string) {
-    const account = await this.repository.account(profileId);
+  private async account(profileId: string, workspaceId: string) {
+    const account = await this.repository.account(profileId, workspaceId);
     if (!account) throw new ApiProblem('LOCAL_PROFILE_NOT_FOUND');
     return account;
   }
   async list(
     profileId: string,
     entries: Iterable<readonly [string, unknown]>,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<TransactionPageResponse> {
     let query;
     try {
@@ -60,10 +62,11 @@ export class TransactionService {
         throw new ApiProblem('INVALID_TRANSACTION_QUERY');
       throw error;
     }
-    const account = await this.account(profileId);
+    const account = await this.account(profileId, workspaceId);
     const { items, totalItems } = await this.repository.transactionPage(
       account.accountId,
       query,
+      workspaceId,
     );
     return {
       items: items.map(project),
@@ -76,11 +79,13 @@ export class TransactionService {
   async get(
     profileId: string,
     transactionId: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<TransactionResponse> {
-    const account = await this.account(profileId);
+    const account = await this.account(profileId, workspaceId);
     const row = await this.repository.transaction(
       account.accountId,
       transactionId,
+      workspaceId,
     );
     if (!row) throw new ApiProblem('TRANSACTION_NOT_FOUND');
     return project(row);

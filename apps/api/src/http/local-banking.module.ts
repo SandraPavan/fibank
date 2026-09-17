@@ -12,25 +12,35 @@ import type { IncomingMessage } from 'node:http';
 import { DatabaseModule } from '../database/database.module';
 import { LocalBankingService } from './local-banking.service';
 import { localProfileId } from './local-profile.context';
+import { workspaceIdFromRequest } from '../workspace/workspace-context';
 @Controller('api/v1')
 export class LocalBankingController {
   constructor(
     @Inject(LocalBankingService) private readonly service: LocalBankingService,
   ) {}
-  @Post('profiles') register(@Body() body: unknown) {
-    return this.service.register(body);
+  @Post('profiles') register(
+    @Req() request: IncomingMessage,
+    @Body() body: unknown,
+  ) {
+    return this.service.register(body, workspaceIdFromRequest(request));
   }
-  @Get('profiles') profiles() {
-    return this.service.profiles();
+  @Get('profiles') profiles(@Req() request: IncomingMessage) {
+    return this.service.profiles(workspaceIdFromRequest(request));
   }
   @Get('accounts/me') account(@Req() request: IncomingMessage) {
-    return this.service.account(localProfileId(request.rawHeaders));
+    return this.service.account(
+      localProfileId(request.rawHeaders),
+      workspaceIdFromRequest(request),
+    );
   }
-  @Get('recipients/resolve') resolve(@Query() query: Record<string, unknown>) {
-    return this.service.resolve(query);
+  @Get('recipients/resolve') resolve(
+    @Req() request: IncomingMessage,
+    @Query() query: Record<string, unknown>,
+  ) {
+    return this.service.resolve(query, workspaceIdFromRequest(request));
   }
-  @Get('recipients/frequent') frequent() {
-    return this.service.frequent();
+  @Get('recipients/frequent') frequent(@Req() request: IncomingMessage) {
+    return this.service.frequent(workspaceIdFromRequest(request));
   }
 }
 @Module({

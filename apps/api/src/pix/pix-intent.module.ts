@@ -14,6 +14,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { DatabaseModule } from '../database/database.module';
 import { SimulationModule } from '../simulation/simulation.module';
 import { localProfileId } from '../http/local-profile.context';
+import { workspaceIdFromRequest } from '../workspace/workspace-context';
 import { PixConfirmationService } from './pix-confirmation.service';
 import {
   PIX_RISK_CONFIG,
@@ -45,18 +46,27 @@ export class PixIntentController {
       localProfileId(request.rawHeaders),
       requestId,
       body,
+      workspaceIdFromRequest(request),
     );
     response.statusCode = result.status === 'REVIEW' ? 202 : 200;
     return result;
   }
   @Post() create(@Req() request: IncomingMessage, @Body() body: unknown) {
-    return this.service.create(localProfileId(request.rawHeaders), body);
+    return this.service.create(
+      localProfileId(request.rawHeaders),
+      body,
+      workspaceIdFromRequest(request),
+    );
   }
   @Get(':requestId') get(
     @Req() request: IncomingMessage,
     @Param('requestId') requestId: string,
   ) {
-    return this.service.get(localProfileId(request.rawHeaders), requestId);
+    return this.service.get(
+      localProfileId(request.rawHeaders),
+      requestId,
+      workspaceIdFromRequest(request),
+    );
   }
   @Patch(':requestId') update(
     @Req() request: IncomingMessage,
@@ -67,6 +77,7 @@ export class PixIntentController {
       localProfileId(request.rawHeaders),
       requestId,
       body,
+      workspaceIdFromRequest(request),
     );
   }
 }

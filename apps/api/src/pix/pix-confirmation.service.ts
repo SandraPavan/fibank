@@ -10,6 +10,7 @@ import {
 } from '../repositories/domain.repository';
 import { PixRiskEvaluator } from './pix-risk.domain';
 import { ApiProblem } from '../http/problem';
+import { DEFAULT_WORKSPACE_ID } from '../workspace/workspace-context';
 import { PixIntentError, validateFunds } from './pix-intent.domain';
 import {
   authenticateConfirmation,
@@ -31,6 +32,7 @@ export class PixConfirmationService {
     profileId: string,
     requestId: string,
     body: unknown,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<PixConfirmationResponse> {
     let result: PixConfirmationResponse;
     try {
@@ -96,7 +98,7 @@ export class PixConfirmationService {
           reasonCodes,
           processedAt: now.toISOString(),
         };
-      });
+      }, workspaceId);
     } catch (error) {
       if (
         error instanceof PixConfirmationError ||

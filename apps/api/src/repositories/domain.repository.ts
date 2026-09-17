@@ -4,6 +4,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../database/prisma.service';
 import { hashPassword, validateRegistration } from '../database/password';
+import { DEFAULT_WORKSPACE_ID } from '../workspace/workspace-context';
 import type {
   Account,
   LocalProfile,
@@ -46,12 +47,27 @@ export const noopLatency: SimulationLatency = {
   delayAfterCommit: async () => {},
 };
 
-function withoutPhysicalId<T extends { id: string }>(record: T): Omit<T, 'id'> {
-  const { id, ...domain } = record;
+function withoutPhysicalId<T extends { id: string; workspaceId: string }>(
+  record: T,
+): Omit<T, 'id' | 'workspaceId'> {
+  const { id, workspaceId, ...domain } = record;
   void id;
+  void workspaceId;
   return domain;
 }
 
+/**
+ * Todo acesso a `Account`, `Recipient`, `PixIntent` e `Transaction` passa por
+ * aqui e é filtrado por `workspaceId` (DEV-004: "toda consulta e escrita de
+ * repository exige o contexto do workspace"). Cada método recebe o
+ * `workspaceId` como último parâmetro, explícito — nunca de um campo enviado
+ * pelo cliente — com o mesmo padrão já usado pelo terceiro parâmetro do
+ * construtor (`PERSISTENCE_RUNTIME`): um default (`DEFAULT_WORKSPACE_ID`)
+ * que preserva o comportamento de instância única de G1–G4 para todo
+ * chamador que ainda não passa workspace (inclusive os testes existentes).
+ * Controllers derivam o valor real da sessão via
+ * `workspaceIdFromRequest(request)` e repassam explicitamente.
+ */
 @Injectable()
 export class DomainRepository {
   constructor(
@@ -62,39 +78,49 @@ export class DomainRepository {
 
   async confirmation<T>(
     action: (unit: ConfirmationUnit) => Promise<T>,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<T> {
     return this.db.$transaction(async (tx) =>
       action({
         account: async (profileId) => {
-          const row = await tx.account.findUnique({ where: { profileId } });
+          const row = await tx.account.findUnique({
+            where: { workspaceId_profileId: { workspaceId, profileId } },
+          });
           return row && withoutPhysicalId(row);
         },
         intent: async (accountId, requestId) => {
           const row = await tx.pixIntent.findFirst({
-            where: { accountId, requestId },
+            where: { workspaceId, accountId, requestId },
             orderBy: [{ createdAt: 'asc' }, { intentId: 'asc' }],
           });
           return row && withoutPhysicalId(row);
         },
         recipient: async (recipientId) => {
-          const row = await tx.recipient.findUnique({ where: { recipientId } });
+          const row = await tx.recipient.findUnique({
+            where: { workspaceId_recipientId: { workspaceId, recipientId } },
+          });
           return row && withoutPhysicalId(row);
         },
         transactions: async (accountId) =>
-          (await tx.transaction.findMany({ where: { accountId } })).map(
-            withoutPhysicalId,
-          ),
+          (
+            await tx.transaction.findMany({ where: { workspaceId, accountId } })
+          ).map(withoutPhysicalId),
         state: async (intentId, state) => {
-          await tx.pixIntent.update({ where: { intentId }, data: { state } });
+          await tx.pixIntent.update({
+            where: { workspaceId_intentId: { workspaceId, intentId } },
+            data: { state },
+          });
         },
         debit: async (accountId, amountCents) => {
           await tx.account.update({
-            where: { accountId },
+            where: { workspaceId_accountId: { workspaceId, accountId } },
             data: { balanceCents: { decrement: amountCents } },
           });
         },
         createTransaction: async (transaction) => {
-          await tx.transaction.create({ data: transaction });
+          await tx.transaction.create({
+            data: { ...transaction, workspaceId },
+          });
         },
       }),
     );
@@ -103,6 +129,7 @@ export class DomainRepository {
   async register(
     displayName: unknown,
     password: unknown,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<{ profile: LocalProfile; account: Account }> {
     const name = validateRegistration(displayName, password);
     const transactionPasswordHash = await hashPassword(password as string);
@@ -118,35 +145,54 @@ export class DomainRepository {
       knownDeviceIds: [],
     };
     await this.db.$transaction(async (tx) => {
-      await tx.localProfile.create({ data: profile });
-      await tx.account.create({ data: account });
+      await tx.localProfile.create({ data: { ...profile, workspaceId } });
+      await tx.account.create({ data: { ...account, workspaceId } });
     });
     return { profile, account };
   }
-  async profiles(): Promise<LocalProfile[]> {
+  async profiles(
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<LocalProfile[]> {
     return this.db.localProfile
-      .findMany({ orderBy: { profileId: 'asc' } })
+      .findMany({ where: { workspaceId }, orderBy: { profileId: 'asc' } })
       .then((rows) => rows.map(withoutPhysicalId));
   }
-  async account(profileId: string): Promise<Account | null> {
+  async account(
+    profileId: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<Account | null> {
     return this.db.account
-      .findUnique({ where: { profileId } })
+      .findUnique({
+        where: { workspaceId_profileId: { workspaceId, profileId } },
+      })
       .then((row) => row && withoutPhysicalId(row));
   }
-  async saveAccount(account: Account): Promise<void> {
+  async saveAccount(
+    account: Account,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<void> {
     await this.db.account.update({
-      where: { accountId: account.accountId },
+      where: {
+        workspaceId_accountId: { workspaceId, accountId: account.accountId },
+      },
       data: account,
     });
   }
-  async recipients(): Promise<Recipient[]> {
+  async recipients(
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<Recipient[]> {
     return this.db.recipient
-      .findMany({ orderBy: { recipientId: 'asc' } })
+      .findMany({ where: { workspaceId }, orderBy: { recipientId: 'asc' } })
       .then((rows) => rows.map(withoutPhysicalId));
   }
-  async recipient(recipientId: string): Promise<Recipient | null> {
+  async recipient(
+    recipientId: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<Recipient | null> {
     return this.db.recipient
-      .findUnique({ where: { recipientId } })
+      .findUnique({
+        where: { workspaceId_recipientId: { workspaceId, recipientId } },
+      })
       .then((row) => row && withoutPhysicalId(row));
   }
   async editIntent(
@@ -159,10 +205,12 @@ export class DomainRepository {
       >
     >,
     now: Date,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<number> {
     return (
       await this.db.pixIntent.updateMany({
         where: {
+          workspaceId,
           accountId,
           intentId,
           state: { in: ['DRAFT', 'AUTH_PENDING'] },
@@ -172,35 +220,52 @@ export class DomainRepository {
       })
     ).count;
   }
-  async recipientByHash(pixKeyHash: string): Promise<Recipient | null> {
+  async recipientByHash(
+    pixKeyHash: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<Recipient | null> {
     return this.db.recipient
-      .findFirst({ where: { pixKeyHash } })
+      .findFirst({ where: { workspaceId, pixKeyHash } })
       .then((row) => row && withoutPhysicalId(row));
   }
-  async saveRecipient(recipient: Recipient): Promise<void> {
+  async saveRecipient(
+    recipient: Recipient,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<void> {
     await this.db.recipient.upsert({
-      where: { recipientId: recipient.recipientId },
-      create: recipient,
-      update: recipient,
+      where: {
+        workspaceId_recipientId: {
+          workspaceId,
+          recipientId: recipient.recipientId,
+        },
+      },
+      create: { ...recipient, workspaceId },
+      update: { ...recipient, workspaceId },
     });
   }
   async createIntent(
     input: Omit<PixIntent, 'intentId' | 'createdAt'> & { createdAt?: Date },
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<PixIntent> {
     return this.db.pixIntent
       .create({
         data: {
           ...input,
+          workspaceId,
           intentId: this.runtime.id('INT'),
           createdAt: input.createdAt ?? this.runtime.now(),
         },
       })
       .then(withoutPhysicalId);
   }
-  async intents(accountId: string, requestId: string): Promise<PixIntent[]> {
+  async intents(
+    accountId: string,
+    requestId: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<PixIntent[]> {
     return this.db.pixIntent
       .findMany({
-        where: { accountId, requestId },
+        where: { workspaceId, accountId, requestId },
         orderBy: [{ createdAt: 'asc' }, { intentId: 'asc' }],
       })
       .then((rows) => rows.map(withoutPhysicalId));
@@ -209,22 +274,25 @@ export class DomainRepository {
     accountId: string,
     intentId: string,
     changes: Pick<PixIntent, 'amountCents' | 'description' | 'state'>,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<number> {
     return (
       await this.db.pixIntent.updateMany({
-        where: { accountId, intentId },
+        where: { workspaceId, accountId, intentId },
         data: changes,
       })
     ).count;
   }
   async createTransaction(
     input: Omit<Transaction, 'transactionId' | 'createdAt' | 'updatedAt'>,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<Transaction> {
     const now = this.runtime.now();
     return this.db.transaction
       .create({
         data: {
           ...input,
+          workspaceId,
           transactionId: this.runtime.id('TXN'),
           createdAt: now,
           updatedAt: now,
@@ -232,10 +300,13 @@ export class DomainRepository {
       })
       .then(withoutPhysicalId);
   }
-  async transactions(accountId: string): Promise<Transaction[]> {
+  async transactions(
+    accountId: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<Transaction[]> {
     return this.db.transaction
       .findMany({
-        where: { accountId },
+        where: { workspaceId, accountId },
         orderBy: [{ createdAt: 'desc' }, { transactionId: 'asc' }],
       })
       .then((rows) => rows.map(withoutPhysicalId));
@@ -243,10 +314,12 @@ export class DomainRepository {
   async transactionPage(
     accountId: string,
     query: TransactionQuery,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<{ items: Transaction[]; totalItems: number }> {
     // Mongo's contains filter uses regex internally; escape every metacharacter.
     const search = query.search?.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const where: Prisma.TransactionWhereInput = {
+      workspaceId,
       accountId,
       ...(query.status ? { status: query.status } : {}),
       ...(query.from || query.toExclusive
@@ -284,11 +357,10 @@ export class DomainRepository {
   async transaction(
     accountId: string,
     transactionId: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<Transaction | null> {
     return this.db.transaction
-      .findFirst({
-        where: { accountId, transactionId },
-      })
+      .findFirst({ where: { workspaceId, accountId, transactionId } })
       .then((row) => row && withoutPhysicalId(row));
   }
 }

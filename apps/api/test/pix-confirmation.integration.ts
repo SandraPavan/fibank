@@ -12,6 +12,7 @@ import {
   PERSISTENCE_RUNTIME,
   type PersistenceRuntime,
 } from '../src/repositories/domain.repository';
+import { DEFAULT_WORKSPACE_ID } from '../src/workspace/workspace-context';
 let app: INestApplication;
 let db: PrismaService;
 let repo: DomainRepository;
@@ -253,7 +254,14 @@ it('revalida estados, validade, destinatário, saldo e limite na confirmação',
   }
   await repo.saveAccount(account);
   const recipient = (await repo.recipient(input.recipientId))!;
-  await db.recipient.delete({ where: { recipientId: input.recipientId } });
+  await db.recipient.delete({
+    where: {
+      workspaceId_recipientId: {
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        recipientId: input.recipientId,
+      },
+    },
+  });
   before = await snapshot();
   problem(await confirm(), 404, 'RECIPIENT_NOT_FOUND');
   expect(await snapshot()).toEqual(before);

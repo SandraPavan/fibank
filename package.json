@@ -18,6 +18,8 @@
     "typecheck": "npm run typecheck --workspaces",
     "test": "node scripts/test-reports.mjs unit",
     "test:docker": "node scripts/test-reports.mjs docker",
+    "test:integration": "npm run test:integration --workspace @finbank/api",
+    "test:e2e": "npm run test:e2e --workspace apps/web",
     "test:workshop-risks": "vitest run --config facilitator/vitest.config.ts characterization",
     "test:workshop-risks:target": "vitest run --config facilitator/vitest.config.ts target",
     "build": "npm run build --workspaces",

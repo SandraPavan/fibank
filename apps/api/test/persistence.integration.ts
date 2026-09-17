@@ -9,6 +9,7 @@ import {
 } from '../src/database/fixtures';
 import { verifyPassword } from '../src/database/password';
 import { DomainRepository } from '../src/repositories/domain.repository';
+import { DEFAULT_WORKSPACE_ID } from '../src/workspace/workspace-context';
 
 const db = new PrismaService();
 const environment = {
@@ -45,7 +46,14 @@ it('persiste os cinco modelos, isola contas e converge seed/reset no replica set
   });
   await expect(colliding.register('Outro Exemplo', '123456')).rejects.toThrow();
   expect(
-    await db.localProfile.findUnique({ where: { profileId: 'PRO-ROLLBACK' } }),
+    await db.localProfile.findUnique({
+      where: {
+        workspaceId_profileId: {
+          workspaceId: DEFAULT_WORKSPACE_ID,
+          profileId: 'PRO-ROLLBACK',
+        },
+      },
+    }),
   ).toBeNull();
   const base = (await repository.account('PRO-1001'))!;
   const hash = base.transactionPasswordHash;
@@ -138,11 +146,25 @@ it('persiste os cinco modelos, isola contas e converge seed/reset no replica set
   expect(
     await repository.intents(first.account.accountId, input.requestId),
   ).toHaveLength(1);
-  expect(await db.localProfile.count()).toBe(3);
-  expect(await db.account.count()).toBe(3);
-  expect(await db.recipient.count()).toBe(2);
-  expect(await db.transaction.count()).toBe(7);
-  expect(await db.pixIntent.count()).toBe(1);
+  expect(
+    await db.localProfile.count({
+      where: { workspaceId: DEFAULT_WORKSPACE_ID },
+    }),
+  ).toBe(3);
+  expect(
+    await db.account.count({ where: { workspaceId: DEFAULT_WORKSPACE_ID } }),
+  ).toBe(3);
+  expect(
+    await db.recipient.count({ where: { workspaceId: DEFAULT_WORKSPACE_ID } }),
+  ).toBe(2);
+  expect(
+    await db.transaction.count({
+      where: { workspaceId: DEFAULT_WORKSPACE_ID },
+    }),
+  ).toBe(7);
+  expect(
+    await db.pixIntent.count({ where: { workspaceId: DEFAULT_WORKSPACE_ID } }),
+  ).toBe(1);
   expect((await repository.account('PRO-1001'))!.balanceCents).toBe(14525000);
   expect((await repository.account('PRO-1001'))!.transactionPasswordHash).toBe(
     hash,
@@ -162,12 +184,26 @@ it('persiste os cinco modelos, isola contas e converge seed/reset no replica set
   await expect(
     reset(db, { ...environment, WORKSHOP_MODE: 'false' }),
   ).rejects.toThrow('Reset não autorizado.');
-  expect(await db.transaction.count()).toBe(7);
+  expect(
+    await db.transaction.count({
+      where: { workspaceId: DEFAULT_WORKSPACE_ID },
+    }),
+  ).toBe(7);
   await reset(db, environment);
-  expect(await db.localProfile.count()).toBe(1);
-  expect(await db.account.count()).toBe(1);
-  expect(await db.recipient.count()).toBe(2);
-  expect(await db.pixIntent.count()).toBe(0);
+  expect(
+    await db.localProfile.count({
+      where: { workspaceId: DEFAULT_WORKSPACE_ID },
+    }),
+  ).toBe(1);
+  expect(
+    await db.account.count({ where: { workspaceId: DEFAULT_WORKSPACE_ID } }),
+  ).toBe(1);
+  expect(
+    await db.recipient.count({ where: { workspaceId: DEFAULT_WORKSPACE_ID } }),
+  ).toBe(2);
+  expect(
+    await db.pixIntent.count({ where: { workspaceId: DEFAULT_WORKSPACE_ID } }),
+  ).toBe(0);
   expect(await repository.transactions('ACC-1001')).toHaveLength(5);
   expect(await repository.account(first.profile.profileId)).toBeNull();
 }, 30000);

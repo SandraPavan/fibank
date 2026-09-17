@@ -4,6 +4,8 @@ import { Module } from '@nestjs/common';
 import { DatabaseModule } from './database/database.module';
 import { LocalBankingModule } from './http/local-banking.module';
 import { SimulationModule } from './simulation/simulation.module';
+import { SessionModule } from './workspace/session.module';
+import { FacilitatorModule } from './workspace/facilitator.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -13,6 +15,8 @@ import { HealthController } from './health.controller';
     PixIntentModule,
     TransactionModule,
     SimulationModule,
+    SessionModule,
+    FacilitatorModule,
   ],
   controllers: [HealthController],
 })

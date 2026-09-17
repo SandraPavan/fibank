@@ -6,6 +6,7 @@ import {
   PERSISTENCE_RUNTIME,
   type PersistenceRuntime,
 } from '../repositories/domain.repository';
+import { DEFAULT_WORKSPACE_ID } from '../workspace/workspace-context';
 import {
   assertSimulationEnabled,
   parseSimulationConfig,
@@ -97,18 +98,32 @@ export class SimulationService {
       const build = DATA_SCENARIOS[scenarioId];
       if (!build) throw new ApiProblem('SIMULATION_SCENARIO_NOT_FOUND');
       const fixture = build(this.runtime.now());
+      // Cenários de simulação continuam restritos ao workspace padrão
+      // (dev/05-controle-didatico.md); grupos do facilitador usam a própria
+      // baseline via `/facilitator/workspaces` (DEV-004).
+      const workspaceId = DEFAULT_WORKSPACE_ID;
       await this.db.$transaction(async (tx) => {
         for (const recipient of fixture.recipients)
           await tx.recipient.upsert({
-            where: { recipientId: recipient.recipientId },
-            create: recipient,
-            update: recipient,
+            where: {
+              workspaceId_recipientId: {
+                workspaceId,
+                recipientId: recipient.recipientId,
+              },
+            },
+            create: { ...recipient, workspaceId },
+            update: { ...recipient, workspaceId },
           });
         for (const transaction of fixture.transactions)
           await tx.transaction.upsert({
-            where: { transactionId: transaction.transactionId },
-            create: transaction,
-            update: transaction,
+            where: {
+              workspaceId_transactionId: {
+                workspaceId,
+                transactionId: transaction.transactionId,
+              },
+            },
+            create: { ...transaction, workspaceId },
+            update: { ...transaction, workspaceId },
           });
       });
     }

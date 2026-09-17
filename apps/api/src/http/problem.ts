@@ -120,6 +120,31 @@ const problems = {
     'Entrada de simulação inválida',
     'Informe dados válidos para aplicar o cenário.',
   ],
+  INVALID_JOIN_INPUT: [
+    400,
+    'Entrada de sessão inválida',
+    'Informe grupo e código de entrada válidos.',
+  ],
+  WORKSPACE_NOT_FOUND: [
+    404,
+    'Grupo não encontrado',
+    'O grupo ou o código de entrada informado não é válido.',
+  ],
+  INVALID_FACILITATOR_SECRET: [
+    401,
+    'Acesso reservado inválido',
+    'Informe o segredo do facilitador para esta operação.',
+  ],
+  INVALID_WORKSPACE_INPUT: [
+    400,
+    'Entrada de grupo inválida',
+    'Informe um identificador de grupo válido.',
+  ],
+  GROUP_SLUG_TAKEN: [
+    409,
+    'Grupo já existe',
+    'Já existe um grupo com este identificador.',
+  ],
 } as const;
 export class ApiProblem extends Error {
   constructor(readonly code: keyof typeof problems) {

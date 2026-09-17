@@ -26,29 +26,49 @@ type RecipientSnapshot {
   institution    String
 }
 
+// Registro dos grupos do workshop (DEV-004). O workspace padrão usado pelo
+// modo solo/clone-fork (`DEFAULT_WORKSPACE_ID` em workspace-context.ts) não
+// tem linha aqui — só grupos criados explicitamente pelo facilitador via
+// `/api/v1/facilitator/workspaces`.
+model Workspace {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  workspaceId String   @unique
+  groupSlug   String   @unique
+  codeHash    String
+  createdAt   DateTime
+}
+
 model LocalProfile {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  profileId   String   @unique
+  workspaceId String
+  profileId   String
   displayName String
   account     Account?
+
+  @@unique([workspaceId, profileId])
 }
 
 model Account {
   id                      String       @id @default(auto()) @map("_id") @db.ObjectId
-  accountId               String       @unique
-  profileId               String       @unique
-  profile                 LocalProfile @relation(fields: [profileId], references: [profileId])
+  workspaceId             String
+  accountId               String
+  profileId               String
+  profile                 LocalProfile @relation(fields: [workspaceId, profileId], references: [workspaceId, profileId])
   ownerName               String
   documentMasked          String
   balanceCents            Int
   dailyLimitCents         Int
   transactionPasswordHash String
   knownDeviceIds          String[]
+
+  @@unique([workspaceId, accountId])
+  @@unique([workspaceId, profileId])
 }
 
 model Recipient {
   id             String   @id @default(auto()) @map("_id") @db.ObjectId
-  recipientId    String   @unique
+  workspaceId    String
+  recipientId    String
   pixKeyHash     String
   pixKeyMasked   String
   name           String
@@ -56,12 +76,14 @@ model Recipient {
   institution    String
   createdAt      DateTime
 
-  @@index([pixKeyHash])
+  @@unique([workspaceId, recipientId])
+  @@index([workspaceId, pixKeyHash])
 }
 
 model PixIntent {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  intentId    String   @unique
+  workspaceId String
+  intentId    String
   requestId   String
   accountId   String
   recipientId String
@@ -72,12 +94,14 @@ model PixIntent {
   createdAt   DateTime
   expiresAt   DateTime
 
-  @@index([accountId, requestId])
+  @@unique([workspaceId, intentId])
+  @@index([workspaceId, accountId, requestId])
 }
 
 model Transaction {
   id                String            @id @default(auto()) @map("_id") @db.ObjectId
-  transactionId     String            @unique
+  workspaceId       String
+  transactionId     String
   requestId         String
   accountId         String
   recipientSnapshot RecipientSnapshot
@@ -91,6 +115,7 @@ model Transaction {
   updatedAt         DateTime
   processedAt       DateTime?
 
-  @@index([accountId, createdAt])
-  @@index([requestId])
+  @@unique([workspaceId, transactionId])
+  @@index([workspaceId, accountId, createdAt])
+  @@index([workspaceId, requestId])
 }
