@@ -25,6 +25,7 @@ export interface ConfirmationUnit {
   state(intentId: string, state: PixIntent['state']): Promise<void>;
   debit(accountId: string, amountCents: number): Promise<void>;
   createTransaction(transaction: Transaction): Promise<void>;
+  rememberDevice(accountId: string, deviceId: string): Promise<void>;
 }
 
 /**
@@ -185,6 +186,15 @@ export class DomainRepository {
         createTransaction: async (transaction) => {
           await tx.transaction.create({
             data: { ...transaction, workspaceId },
+          });
+        },
+        // DEV-101: só chamado pelo confirmation service quando o
+        // dispositivo ainda não está em `knownDeviceIds`, então `push` não
+        // duplica.
+        rememberDevice: async (accountId, deviceId) => {
+          await tx.account.update({
+            where: { workspaceId_accountId: { workspaceId, accountId } },
+            data: { knownDeviceIds: { push: deviceId } },
           });
         },
       }),

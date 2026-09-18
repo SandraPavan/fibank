@@ -51,6 +51,13 @@ beforeEach(async () => {
   const registered = await repo.register('Pessoa Confirmação', '123456');
   profileId = registered.profile.profileId;
   accountId = registered.account.accountId;
+  // DEV-101: este arquivo testa a confirmação em si, não o sinal de
+  // dispositivo (D05) — registra o dispositivo usado como já conhecido
+  // para não introduzir NEW_DEVICE nos testes que não tratam disso.
+  await repo.saveAccount({
+    ...registered.account,
+    knownDeviceIds: [input.deviceId],
+  });
   await spec()
     .post(base)
     .withHeaders('X-Local-Profile-Id', profileId)

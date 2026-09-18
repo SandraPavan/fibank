@@ -79,7 +79,13 @@ export class PixConfirmationService {
         const transactions = await unit.transactions(account.accountId);
         validateFunds(account, intent.amountCents, transactions, now);
         const decision = await this.risk.evaluate(
-          { accountId: account.accountId, amountCents: intent.amountCents },
+          {
+            accountId: account.accountId,
+            amountCents: intent.amountCents,
+            deviceId: intent.deviceId,
+            knownDeviceIds: account.knownDeviceIds,
+            now,
+          },
           {
             transactions: async (requestedAccountId) => {
               if (requestedAccountId !== account.accountId)
@@ -91,8 +97,14 @@ export class PixConfirmationService {
         if (intent.state === 'DRAFT')
           await unit.state(intent.intentId, 'AUTH_PENDING');
         await unit.state(intent.intentId, 'PROCESSING');
-        if (decision.status === 'APPROVED')
+        if (decision.status === 'APPROVED') {
           await unit.debit(account.accountId, intent.amountCents);
+          // DEV-101: dispositivo só é "novo" na primeira vez; uma
+          // confirmação aprovada com ele o torna conhecido daqui em
+          // diante, evitando que `NEW_DEVICE` vire ruído permanente.
+          if (!account.knownDeviceIds.includes(intent.deviceId))
+            await unit.rememberDevice(account.accountId, intent.deviceId);
+        }
         const transactionId = this.runtime.id('TXN');
         const { status, riskScore, reasonCodes } = decision;
         await unit.createTransaction({

@@ -108,6 +108,7 @@ describe('PixConfirmationService — atraso de simulação (DEV-040)', () => {
       state: async () => {},
       debit: async () => {},
       createTransaction: async () => {},
+      rememberDevice: async () => {},
     };
     const repository = {
       confirmation: (action: (unit: ConfirmationUnit) => unknown) =>
