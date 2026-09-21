@@ -155,7 +155,10 @@ assert.deepEqual(Object.keys(confirmation).sort(), [
 ]);
 assert.equal(confirmation.requestId, intention.requestId);
 assert.equal(confirmation.status, 'APPROVED');
-assert.deepEqual(confirmation.reasonCodes, ['WITHIN_CURRENT_RULES']);
+// DEV-101: `DEV-GATEWAY` é o primeiro dispositivo desta conta recém-criada
+// (`created`, acima) — o sinal de dispositivo novo aparece aqui sem forçar
+// REVIEW; a partir desta confirmação aprovada ele passa a ser conhecido.
+assert.deepEqual(confirmation.reasonCodes, ['NEW_DEVICE']);
 assert.ok(confirmation.transactionId);
 assert.ok(Number.isFinite(Date.parse(confirmation.processedAt)));
 const debited = await request('/accounts/me', { headers: pixHeaders });
@@ -229,7 +232,9 @@ for (const persisted of [confirmation, review]) {
   assert.deepEqual(detail.reasonCodes, persisted.reasonCodes);
   assert.equal(detail.type, 'PIX');
   assert.deepEqual(detail.recipientSnapshot, recipient);
+  // DEV-103: ageMs/slaBreached no contrato público de transação.
   assert.deepEqual(Object.keys(detail).sort(), [
+    'ageMs',
     'amountCents',
     'createdAt',
     'description',
@@ -237,6 +242,7 @@ for (const persisted of [confirmation, review]) {
     'reasonCodes',
     'recipientSnapshot',
     'requestId',
+    'slaBreached',
     'status',
     'transactionId',
     'type',
@@ -246,7 +252,14 @@ for (const persisted of [confirmation, review]) {
     { headers: pixHeaders },
   );
   assert.equal(filtered.totalItems, 1);
-  assert.deepEqual(filtered.items, [detail]);
+  // DEV-103: `ageMs` é calculado contra o relógio real a cada leitura —
+  // duas chamadas HTTP distintas para a mesma transação REVIEW legitimamente
+  // divergem em alguns milissegundos; normaliza antes de comparar o resto.
+  const [filteredItem] = filtered.items;
+  assert.deepEqual(
+    { ...filteredItem, ageMs: null },
+    { ...detail, ageMs: null },
+  );
   assert.equal(
     (await request(`/transactions/${persisted.transactionId}`, {}, 404)).code,
     'TRANSACTION_NOT_FOUND',

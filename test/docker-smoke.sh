@@ -139,7 +139,7 @@ if compose logs --no-color api web | grep -Eq 'marina(@|%40)example\.test|invali
 fi
 
 compose exec -T mongo mongosh --quiet --eval \
-  'const data = db.getSiblingDB("finbank_test"); const tx = data.Transaction.findOne({requestId: "REQ-GATEWAY-012"}); if (!tx || tx.status !== "APPROVED" || Number(tx.amountCents) !== 6000 || Number(tx.riskScore) !== 10 || tx.recipientSnapshot.recipientId !== "REC-1001" || data.Transaction.countDocuments({requestId: "REQ-GATEWAY-012"}) !== 1) { print("Confirmação não corresponde à transação persistida."); quit(1); }'
+  'const data = db.getSiblingDB("finbank_test"); const tx = data.Transaction.findOne({requestId: "REQ-GATEWAY-012"}); if (!tx || tx.status !== "APPROVED" || Number(tx.amountCents) !== 6000 || Number(tx.riskScore) !== 40 || tx.recipientSnapshot.recipientId !== "REC-1001" || data.Transaction.countDocuments({requestId: "REQ-GATEWAY-012"}) !== 1) { print("Confirmação não corresponde à transação persistida."); quit(1); }'
 
 compose exec -T mongo mongosh --quiet --eval \
   'const data = db.getSiblingDB("finbank_test"); const tx = data.Transaction.findOne({requestId: "REQ-GATEWAY-021"}); const intent = data.PixIntent.findOne({requestId: "REQ-GATEWAY-021"}); const account = tx && data.Account.findOne({accountId: tx.accountId}); if (!tx || tx.status !== "REVIEW" || Number(tx.riskScore) !== 80 || Number(tx.amountCents) !== 500000 || tx.reasonCodes.join(",") !== "AMOUNT_REQUIRES_REVIEW" || !tx.processedAt || !intent || intent.state !== "REVIEW" || !account || Number(account.balanceCents) !== 14519000 || data.Transaction.countDocuments({requestId: "REQ-GATEWAY-021"}) !== 1) { print("Revisão ou saldo persistidos divergentes."); quit(1); }'
