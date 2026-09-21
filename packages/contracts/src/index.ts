@@ -120,6 +120,12 @@ export interface WorkspaceMetricsResponse {
   failed: number;
 }
 
+export interface WorkspaceSummaryResponse {
+  workspaceId: string;
+  groupSlug: string;
+  createdAt: string;
+}
+
 export interface JoinSessionRequest {
   groupSlug: string;
   code: string;

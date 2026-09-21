@@ -2,6 +2,7 @@ import { createRouter, createWebHistory, type RouterHistory } from 'vue-router';
 import AppShell from './layouts/AppShell.vue';
 import ComprovanteView from './views/ComprovanteView.vue';
 import ErroView from './views/ErroView.vue';
+import FacilitatorView from './views/FacilitatorView.vue';
 import HistoricoView from './views/HistoricoView.vue';
 import JoinView from './views/JoinView.vue';
 import LoginView from './views/LoginView.vue';
@@ -18,6 +19,11 @@ export function createFinBankRouter(
       { path: '/', redirect: '/login' },
       { path: '/login', name: 'login', component: LoginView },
       { path: '/join/:groupSlug', name: 'join', component: JoinView },
+      {
+        path: '/facilitator',
+        name: 'facilitator',
+        component: FacilitatorView,
+      },
       {
         path: '/app',
         component: AppShell,

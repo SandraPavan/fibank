@@ -117,6 +117,22 @@ describe('http client', () => {
     await assertion;
   });
 
+  it('DEV-104: mescla headers extras (ex. X-Facilitator-Secret) sem perder Content-Type', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify([]), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await apiGet('/facilitator/workspaces', {
+      headers: { 'X-Facilitator-Secret': 'segredo-1' },
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(headers['X-Facilitator-Secret']).toBe('segredo-1');
+    expect(headers['Content-Type']).toBe('application/json');
+  });
+
   it('não usa AbortController quando nenhum timeout é passado', async () => {
     const fetchMock = vi
       .fn()

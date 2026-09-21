@@ -31,6 +31,7 @@ const API_BASE = '/api/v1';
 
 interface RequestOptions {
   readonly timeoutMs?: number;
+  readonly headers?: Record<string, string>;
 }
 
 async function request<T>(
@@ -50,6 +51,7 @@ async function request<T>(
       signal: controller?.signal,
       headers: {
         'Content-Type': 'application/json',
+        ...options?.headers,
         ...init?.headers,
       },
     });
@@ -81,8 +83,8 @@ async function request<T>(
   return (await response.json()) as T;
 }
 
-export function apiGet<T>(path: string): Promise<T> {
-  return request<T>(path);
+export function apiGet<T>(path: string, options?: RequestOptions): Promise<T> {
+  return request<T>(path, undefined, options);
 }
 
 export function apiPost<T>(
