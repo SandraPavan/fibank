@@ -1,3 +1,5 @@
+import { NEW_DEVICE_RISK_SCORE } from './pix-risk.domain';
+
 export const PIX_RISK_CONFIG = Symbol('PIX_RISK_CONFIG');
 export interface PixRiskConfig {
   readonly reviewAmountCents: number;
@@ -48,9 +50,16 @@ export function parsePixRiskConfig(
       env.PIX_BEHAVIOR_CUMULATIVE_AMOUNT_CENTS,
       2000000,
     ),
-    reviewRiskScoreThreshold: parsePositiveInteger(
+    reviewRiskScoreThreshold: parseReviewRiskScoreThreshold(
       env.PIX_BEHAVIOR_REVIEW_SCORE_THRESHOLD,
-      70,
     ),
   });
+}
+// DEV-101 (RF-03/CT23): garante que dispositivo novo sozinho nunca force
+// REVIEW, mesmo com o limiar recalibrado via env — não só pelo default.
+function parseReviewRiskScoreThreshold(raw: string | undefined): number {
+  const value = parsePositiveInteger(raw, 70);
+  if (value <= NEW_DEVICE_RISK_SCORE)
+    throw new Error('Configuração de risco inválida.');
+  return value;
 }

@@ -3,6 +3,7 @@ import type { INestApplicationContext } from '@nestjs/common';
 import { parsePixRiskConfig } from '../src/pix/pix-risk.config';
 import {
   evaluateCurrentRisk,
+  NEW_DEVICE_RISK_SCORE,
   PixRiskEvaluator,
   transactionRiskHistory,
 } from '../src/pix/pix-risk.domain';
@@ -69,6 +70,21 @@ it.each([
   expect(() => parsePixRiskConfig({ PIX_REVIEW_AMOUNT_CENTS: raw })).toThrow(
     'Configuração de risco inválida.',
   );
+});
+it('DEV-101 (RF-03/CT23): recusa limiar que deixaria dispositivo novo forçar REVIEW sozinho', () => {
+  for (const raw of [
+    String(NEW_DEVICE_RISK_SCORE),
+    String(NEW_DEVICE_RISK_SCORE - 1),
+    '1',
+  ])
+    expect(() =>
+      parsePixRiskConfig({ PIX_BEHAVIOR_REVIEW_SCORE_THRESHOLD: raw }),
+    ).toThrow('Configuração de risco inválida.');
+  expect(
+    parsePixRiskConfig({
+      PIX_BEHAVIOR_REVIEW_SCORE_THRESHOLD: String(NEW_DEVICE_RISK_SCORE + 1),
+    }).reviewRiskScoreThreshold,
+  ).toBe(NEW_DEVICE_RISK_SCORE + 1);
 });
 it('DEV-101: ignora histórico fora da janela ou com status irrelevante', () => {
   const config = parsePixRiskConfig({});

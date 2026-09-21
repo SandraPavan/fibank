@@ -79,15 +79,18 @@ function cumulativeAmountSignal(
 
 /**
  * DEV-101 (RF-04/CT29 + RF-03/CT23): dispositivo novo é um sinal, nunca
- * sozinho suficiente para `REVIEW` (30 < `reviewRiskScoreThreshold`), mas
- * pesado o bastante para combinar com qualquer um dos outros sinais (40)
- * e cruzar o limiar junto — do contrário "combinar dispositivo" (RF-04)
- * nunca mudaria a decisão de verdade.
+ * sozinho suficiente para `REVIEW`, mas pesado o bastante para combinar
+ * com qualquer um dos outros sinais (40) e cruzar o limiar junto — do
+ * contrário "combinar dispositivo" (RF-04) nunca mudaria a decisão de
+ * verdade. `parsePixRiskConfig` recusa `reviewRiskScoreThreshold` que
+ * não deixe esse peso estritamente abaixo do limiar, para que a garantia
+ * acima não dependa só do valor default.
  */
+export const NEW_DEVICE_RISK_SCORE = 30;
 function newDeviceSignal(input: PixRiskInput): PixRiskSignal | null {
   return input.knownDeviceIds.includes(input.deviceId)
     ? null
-    : { reasonCode: 'NEW_DEVICE', riskScore: 30 };
+    : { reasonCode: 'NEW_DEVICE', riskScore: NEW_DEVICE_RISK_SCORE };
 }
 
 export function evaluateCurrentRisk(
