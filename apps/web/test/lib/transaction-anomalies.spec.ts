@@ -1,11 +1,6 @@
 import type { TransactionResponse } from '@finbank/contracts';
 import { describe, expect, it } from 'vitest';
-import {
-  findPossibleDuplicates,
-  isStaleReview,
-} from '../../src/lib/transactionAnomalies';
-
-const NOW = new Date('2026-08-18T14:00:00-03:00');
+import { findPossibleDuplicates } from '../../src/lib/transactionAnomalies';
 
 function transaction(
   overrides: Partial<TransactionResponse> = {},
@@ -27,38 +22,11 @@ function transaction(
     reasonCodes: [],
     createdAt: '2026-08-18T14:00:00-03:00',
     processedAt: '2026-08-18T14:00:01-03:00',
+    ageMs: null,
+    slaBreached: false,
     ...overrides,
   };
 }
-
-describe('isStaleReview', () => {
-  it('não sinaliza uma transação aprovada, mesmo que antiga', () => {
-    const old = transaction({
-      status: 'APPROVED',
-      createdAt: '2026-08-01T00:00:00-03:00',
-    });
-
-    expect(isStaleReview(old, NOW)).toBe(false);
-  });
-
-  it('não sinaliza REVIEW com menos de 24h (23h59)', () => {
-    const fresh = transaction({
-      status: 'REVIEW',
-      createdAt: '2026-08-17T14:01:00-03:00',
-    });
-
-    expect(isStaleReview(fresh, NOW)).toBe(false);
-  });
-
-  it('sinaliza REVIEW com mais de 24h (F07 — stale-review)', () => {
-    const stale = transaction({
-      status: 'REVIEW',
-      createdAt: '2026-08-17T13:00:00-03:00', // 25h antes de NOW
-    });
-
-    expect(isStaleReview(stale, NOW)).toBe(true);
-  });
-});
 
 describe('findPossibleDuplicates', () => {
   it('sinaliza duas transações com mesmo destinatário/valor a poucos minutos (duplicate-retry)', () => {

@@ -38,6 +38,8 @@ function baseTransaction(
     reasonCodes: [],
     createdAt: new Date().toISOString(),
     processedAt: new Date().toISOString(),
+    ageMs: null,
+    slaBreached: false,
     ...overrides,
   };
 }
@@ -51,6 +53,10 @@ function seedFiveRecords(): TransactionResponse[] {
       transactionId: 'PIX-STALE',
       status: 'REVIEW',
       createdAt: new Date(now - 25 * 60 * 60 * 1000).toISOString(),
+      // DEV-103: `slaBreached` já vem calculado da API, não do relógio
+      // do navegador — o teste simula a resposta do backend.
+      ageMs: 25 * 60 * 60 * 1000,
+      slaBreached: true,
     }),
     baseTransaction({
       transactionId: 'PIX-DUP-1',

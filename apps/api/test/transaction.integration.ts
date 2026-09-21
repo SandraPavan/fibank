@@ -8,7 +8,11 @@ import { createApiApplication } from '../src/bootstrap';
 import { PrismaService } from '../src/database/prisma.service';
 import { reset } from '../src/database/seed';
 import { transactions } from '../src/database/fixtures';
-import { DomainRepository } from '../src/repositories/domain.repository';
+import {
+  DomainRepository,
+  PERSISTENCE_RUNTIME,
+  type PersistenceRuntime,
+} from '../src/repositories/domain.repository';
 import { PixRiskEvaluator } from '../src/pix/pix-risk.domain';
 import { DEFAULT_WORKSPACE_ID } from '../src/workspace/workspace-context';
 let app: INestApplication;
@@ -16,6 +20,9 @@ let db: PrismaService;
 let repo: DomainRepository;
 let base: string;
 let other: string;
+// DEV-103: fixa o relógio para que `ageMs`/`slaBreached` (calculados a
+// partir de `createdAt` da fixture) sejam determinísticos entre execuções.
+const now = new Date('2026-08-18T15:00:00Z');
 settings.setLogLevel('SILENT');
 beforeAll(async () => {
   if (new URL(process.env.DATABASE_URL ?? '').pathname !== '/finbank_test')
@@ -23,6 +30,10 @@ beforeAll(async () => {
   app = await createApiApplication();
   db = app.get(PrismaService);
   repo = app.get(DomainRepository);
+  vi.spyOn(
+    app.get<PersistenceRuntime>(PERSISTENCE_RUNTIME),
+    'now',
+  ).mockImplementation(() => now);
   await reset(db, {
     WORKSHOP_MODE: 'true',
     DATABASE_URL: process.env.DATABASE_URL,
@@ -75,6 +86,10 @@ it('projeta os cinco registros, detalhe e null sem mutação nem avaliação', a
     const persisted = transactions.find(
       (row) => row.transactionId === item.transactionId,
     )!;
+    const ageMs =
+      persisted.status === 'REVIEW'
+        ? now.getTime() - persisted.createdAt.getTime()
+        : null;
     expect(item).toEqual({
       transactionId: persisted.transactionId,
       requestId: persisted.requestId,
@@ -86,6 +101,11 @@ it('projeta os cinco registros, detalhe e null sem mutação nem avaliação', a
       reasonCodes: persisted.reasonCodes,
       createdAt: persisted.createdAt.toISOString(),
       processedAt: persisted.processedAt?.toISOString() ?? null,
+      // DEV-103: TXN-1002 (REVIEW, criada 22h antes de `now`) ainda não
+      // estoura o limiar default de 24h — `ageMs` presente, `slaBreached`
+      // falso.
+      ageMs,
+      slaBreached: ageMs !== null && ageMs > 24 * 60 * 60 * 1000,
     });
     expect(
       (await spec().get(`${base}/${item.transactionId}`).expectStatus(200))

@@ -1,29 +1,19 @@
 import type { TransactionResponse } from '@finbank/contracts';
 
 /**
- * Sinalizadores visuais para T06 (DEV-034). Deliberadamente simples: a
- * própria fixture `duplicate-retry` (dev/07-dados-e-cenarios.md) descreve
- * a duplicidade como "contingência visual", não como algo que precise de
- * um algoritmo robusto de detecção. Nenhuma das duas funções altera dados
- * nem chama a API — operam só sobre a página de resultados já carregada.
+ * Sinalizador visual de duplicidade para T06 (DEV-034). Deliberadamente
+ * simples: a própria fixture `duplicate-retry` (dev/07-dados-e-cenarios.md)
+ * descreve a duplicidade como "contingência visual", não como algo que
+ * precise de um algoritmo robusto de detecção. Não altera dados nem chama
+ * a API — opera só sobre a página de resultados já carregada.
+ *
+ * O sinal de "revisão antiga" (F07) deixou de ser calculado aqui a partir
+ * da DEV-103 — vem pronto de `TransactionResponse.slaBreached`, calculado
+ * no backend com o mesmo relógio (`PersistenceRuntime.now()`) que o resto
+ * da API, em vez do relógio do navegador.
  */
 
-const STALE_REVIEW_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 const DUPLICATE_WINDOW_MS = 5 * 60 * 1000;
-
-/**
- * `REVIEW` há mais de 24h (F07). `now` é injetável para manter os testes
- * deterministas (RNF-02); ao vivo, o padrão é o relógio do navegador —
- * não há endpoint que exponha o `FIXED_CLOCK` do backend.
- */
-export function isStaleReview(
-  transaction: TransactionResponse,
-  now: Date = new Date(),
-): boolean {
-  if (transaction.status !== 'REVIEW') return false;
-  const ageMs = now.getTime() - new Date(transaction.createdAt).getTime();
-  return ageMs > STALE_REVIEW_THRESHOLD_MS;
-}
 
 /**
  * Marca como possível duplicidade cada transação que compartilha

@@ -4,6 +4,10 @@ import { DatabaseModule } from '../database/database.module';
 import { localProfileId } from '../http/local-profile.context';
 import { workspaceIdFromRequest } from '../workspace/workspace-context';
 import { TransactionService } from './transaction.service';
+import {
+  PIX_REVIEW_SLA_CONFIG,
+  parsePixReviewSlaConfig,
+} from './pix-review-sla.config';
 @Controller('api/v1/transactions')
 export class TransactionController {
   constructor(
@@ -33,6 +37,12 @@ export class TransactionController {
 @Module({
   imports: [DatabaseModule],
   controllers: [TransactionController],
-  providers: [TransactionService],
+  providers: [
+    TransactionService,
+    {
+      provide: PIX_REVIEW_SLA_CONFIG,
+      useFactory: () => parsePixReviewSlaConfig(),
+    },
+  ],
 })
 export class TransactionModule {}

@@ -10,6 +10,10 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { DatabaseModule } from '../database/database.module';
+import {
+  PIX_REVIEW_SLA_CONFIG,
+  parsePixReviewSlaConfig,
+} from '../transactions/pix-review-sla.config';
 import { SessionModule } from './session.module';
 import { FacilitatorGuard } from './facilitator.guard';
 import { FacilitatorService } from './facilitator.service';
@@ -38,10 +42,21 @@ export class FacilitatorController {
   ) {
     return this.service.resetWorkspace(groupSlug);
   }
+
+  @Get(':groupSlug/metrics') metrics(@Param('groupSlug') groupSlug: string) {
+    return this.service.metrics(groupSlug);
+  }
 }
 @Module({
   imports: [DatabaseModule, SessionModule],
   controllers: [FacilitatorController],
-  providers: [FacilitatorService, FacilitatorGuard],
+  providers: [
+    FacilitatorService,
+    FacilitatorGuard,
+    {
+      provide: PIX_REVIEW_SLA_CONFIG,
+      useFactory: () => parsePixReviewSlaConfig(),
+    },
+  ],
 })
 export class FacilitatorModule {}

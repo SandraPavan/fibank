@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import type { TransactionQuery } from '../transactions/transaction-query.domain';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../database/prisma.service';
 import { hashPassword, validateRegistration } from '../database/password';
@@ -109,6 +109,16 @@ function withoutPhysicalId<T extends { id: string; workspaceId: string }>(
  */
 @Injectable()
 export class DomainRepository {
+  /**
+   * DEV-103 (GAP06/RISK-04): loga criação de intenção e de transação com
+   * `workspaceId`, `requestId`, `accountId` e `deviceId` (dev/02-
+   * arquitetura.md: "logs incluem workspaceId e requestId"). `deviceId` é
+   * a chave de correlação entre tentativas que trocam de `requestId` —
+   * ex.: cliente abandona o app e reabre do zero (RISK-04/GAP06) — porque
+   * é o único identificador estável do cliente que já trafega em toda
+   * intenção, sem introduzir um novo token de sessão.
+   */
+  private readonly logger = new Logger(DomainRepository.name);
   constructor(
     @Inject(PrismaService) private readonly db: PrismaService,
     @Inject(PERSISTENCE_RUNTIME)
@@ -134,7 +144,13 @@ export class DomainRepository {
     action: (unit: ConfirmationUnit) => Promise<T>,
     workspaceId: string,
   ): Promise<T> {
-    return this.db.$transaction(async (tx) =>
+    // DEV-103 (REVIEW): `created` só é lido depois que `$transaction`
+    // resolve com sucesso — logar de dentro da closure logaria uma
+    // criação que o Mongo ainda pode reverter (ex.: falha num passo
+    // posterior do mesmo `action`, como em "reverte transação realmente
+    // gravada quando estado final falha").
+    let created: Transaction | undefined;
+    const result = await this.db.$transaction(async (tx) =>
       action({
         account: async (profileId) => {
           const row = await tx.account.findUnique({
@@ -187,6 +203,7 @@ export class DomainRepository {
           await tx.transaction.create({
             data: { ...transaction, workspaceId },
           });
+          created = transaction;
         },
         // DEV-101: só chamado pelo confirmation service quando o
         // dispositivo ainda não está em `knownDeviceIds`, então `push` não
@@ -199,6 +216,16 @@ export class DomainRepository {
         },
       }),
     );
+    if (created)
+      this.logger.log({
+        event: 'pix_transaction_created',
+        workspaceId,
+        requestId: created.requestId,
+        accountId: created.accountId,
+        deviceId: created.deviceId,
+        status: created.status,
+      });
+    return result;
   }
 
   async register(
@@ -323,7 +350,7 @@ export class DomainRepository {
     workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<PixIntent> {
     try {
-      return await this.db.pixIntent
+      const intent = await this.db.pixIntent
         .create({
           data: {
             ...input,
@@ -333,6 +360,14 @@ export class DomainRepository {
           },
         })
         .then(withoutPhysicalId);
+      this.logger.log({
+        event: 'pix_intent_created',
+        workspaceId,
+        requestId: intent.requestId,
+        accountId: intent.accountId,
+        deviceId: intent.deviceId,
+      });
+      return intent;
     } catch (error) {
       // DEV-100 (RF-05/CT36): duas criações concorrentes com o mesmo
       // requestId competem pelo índice único; a perdedora relê e decide
@@ -456,5 +491,35 @@ export class DomainRepository {
         where: { workspaceId_accountId_requestId: { workspaceId, accountId, requestId } },
       })
       .then((row) => row && withoutPhysicalId(row));
+  }
+  /**
+   * DEV-103: contagem por status para todo o workspace (não por conta —
+   * consumido pelo painel reservado do facilitador). `reviewSlaBreached`
+   * usa o mesmo `now`/limiar que `TransactionService.project()` aplica na
+   * resposta pública, para não divergir do que T06 mostra.
+   */
+  async transactionMetrics(
+    workspaceId: string,
+    now: Date,
+    reviewSlaMs: number,
+  ): Promise<{
+    approved: number;
+    review: number;
+    reviewSlaBreached: number;
+    rejected: number;
+    failed: number;
+  }> {
+    const slaCutoff = new Date(now.getTime() - reviewSlaMs);
+    const [approved, review, reviewSlaBreached, rejected, failed] =
+      await Promise.all([
+        this.db.transaction.count({ where: { workspaceId, status: 'APPROVED' } }),
+        this.db.transaction.count({ where: { workspaceId, status: 'REVIEW' } }),
+        this.db.transaction.count({
+          where: { workspaceId, status: 'REVIEW', createdAt: { lt: slaCutoff } },
+        }),
+        this.db.transaction.count({ where: { workspaceId, status: 'REJECTED' } }),
+        this.db.transaction.count({ where: { workspaceId, status: 'FAILED' } }),
+      ]);
+    return { approved, review, reviewSlaBreached, rejected, failed };
   }
 }

@@ -98,6 +98,10 @@ export interface TransactionResponse {
   reasonCodes: string[];
   createdAt: string;
   processedAt: string | null;
+  /** DEV-103 (F07/GAP08): só preenchido para `status === 'REVIEW'`. */
+  ageMs: number | null;
+  /** DEV-103 (F07/GAP08): `ageMs` acima do limiar de SLA configurado. */
+  slaBreached: boolean;
 }
 export interface TransactionPageResponse {
   items: TransactionResponse[];
@@ -105,6 +109,15 @@ export interface TransactionPageResponse {
   pageSize: number;
   totalItems: number;
   totalPages: number;
+}
+
+export interface WorkspaceMetricsResponse {
+  groupSlug: string;
+  approved: number;
+  review: number;
+  reviewSlaBreached: number;
+  rejected: number;
+  failed: number;
 }
 
 export interface JoinSessionRequest {

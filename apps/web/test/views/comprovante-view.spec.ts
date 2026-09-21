@@ -25,6 +25,8 @@ const approvedTransaction = {
   reasonCodes: ['WITHIN_CURRENT_RULES'],
   createdAt: '2026-08-18T14:30:00-03:00',
   processedAt: '2026-08-18T14:32:01-03:00',
+  ageMs: null,
+  slaBreached: false,
 };
 
 async function mountView(transactionId = 'PIX-1') {

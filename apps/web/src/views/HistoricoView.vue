@@ -8,23 +8,19 @@ import AppCard from '../components/AppCard.vue';
 import AppInput from '../components/AppInput.vue';
 import StatusPill from '../components/StatusPill.vue';
 import { formatCents } from '../lib/currency';
-import {
-  findPossibleDuplicates,
-  isStaleReview,
-} from '../lib/transactionAnomalies';
+import { findPossibleDuplicates } from '../lib/transactionAnomalies';
 
 /**
- * T06 — Histórico de transações (DEV-034).
+ * T06 — Histórico de transações (DEV-034/DEV-103).
  *
- * Filtros e paginação espelham `GET /transactions` (RP-09). Duplicidade
- * e revisão antiga são sinalizadas com ícone + texto, nunca só por cor
- * (RNF-07) — `StatusPill` cobre o status base; os badges extras aqui
- * cobrem os dois sinais didáticos que a fixture só descreve como
- * "contingência visual" (dev/07-dados-e-cenarios.md).
+ * Filtros e paginação espelham `GET /transactions` (RP-09). Duplicidade e
+ * revisão antiga são sinalizadas com ícone + texto, nunca só por cor
+ * (RNF-07) — `StatusPill` cobre o status base. Duplicidade continua sendo
+ * um sinal só visual, calculado aqui (dev/07-dados-e-cenarios.md); revisão
+ * antiga (F07) vem pronta da API (`item.slaBreached`, DEV-103).
  *
- * Preservar: sem SLA/escalonamento para revisão antiga (F07) e sem ações
- * que mudem o estado de uma transação (cancelar/revisar) — o contrato
- * atual não tem esse endpoint.
+ * Preservar: sem ações que mudem o estado de uma transação
+ * (cancelar/revisar) — o contrato atual não tem esse endpoint.
  */
 
 const STATUS_OPTIONS = [
@@ -47,14 +43,12 @@ const loading = ref(true);
 const errorMessage = ref<string | null>(null);
 
 const items = computed(() => pageResult.value?.items ?? []);
-const staleReviewIds = computed(() => {
-  const now = new Date();
-  return new Set(
-    items.value
-      .filter((item) => isStaleReview(item, now))
-      .map((item) => item.transactionId),
-  );
-});
+const staleReviewIds = computed(
+  () =>
+    new Set(
+      items.value.filter((item) => item.slaBreached).map((item) => item.transactionId),
+    ),
+);
 const duplicateIds = computed(() => findPossibleDuplicates(items.value));
 const attentionIds = computed(() => {
   const combined = new Set<string>(staleReviewIds.value);
