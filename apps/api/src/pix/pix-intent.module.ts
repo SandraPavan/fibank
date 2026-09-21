@@ -28,6 +28,7 @@ import {
   type PixRiskHistoryPort,
 } from './pix-risk.domain';
 import { PixIntentService } from './pix-intent.service';
+import { PixRequestStatusService } from './pix-request-status.service';
 @Controller('api/v1/pix/intents')
 export class PixIntentController {
   constructor(
@@ -87,12 +88,30 @@ export class PixIntentController {
     );
   }
 }
+@Controller('api/v1/pix/requests')
+export class PixRequestController {
+  constructor(
+    @Inject(PixRequestStatusService)
+    private readonly status: PixRequestStatusService,
+  ) {}
+  @Get(':requestId') get(
+    @Req() request: IncomingMessage,
+    @Param('requestId') requestId: string,
+  ) {
+    return this.status.status(
+      localProfileId(request.rawHeaders),
+      requestId,
+      workspaceIdFromRequest(request),
+    );
+  }
+}
 @Module({
   imports: [DatabaseModule, SimulationModule],
-  controllers: [PixIntentController],
+  controllers: [PixIntentController, PixRequestController],
   providers: [
     PixIntentService,
     PixConfirmationService,
+    PixRequestStatusService,
     { provide: PIX_RISK_CONFIG, useFactory: () => parsePixRiskConfig() },
     { provide: PIX_RISK_HISTORY, useValue: transactionRiskHistory },
     {

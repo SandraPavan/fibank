@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import type { PixRequestStatusResponse } from '@finbank/contracts';
+import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import AppButton from '../components/AppButton.vue';
 import AppCard from '../components/AppCard.vue';
 import { usePixTransferStore } from '../stores/pixTransfer';
 
 /**
- * T05 — Erro na transação (DEV-033).
+ * T05 — Erro na transação (DEV-033/DEV-102).
  *
  * Tela genérica para quando T03 não recebe um resultado interpretável
  * (timeout/falha de rede — `confirmOutcome === 'unknown-result'`, ver
@@ -17,27 +18,55 @@ import { usePixTransferStore } from '../stores/pixTransfer';
  * RP-08 ("Ver detalhes do erro"): mostra um código de referência e o
  * estado conhecido pelo cliente, sem regras internas de antifraude.
  *
- * Preservar (DEV-033): "Tentar novamente" só volta a T03 para uma nova
- * tentativa — não consulta o `requestId` original antes de reabrir o
- * formulário. Reconciliar automaticamente é comportamento-alvo (RP-07,
- * DEV-102, bloqueado), não do baseline.
+ * DEV-102 (RP-07): "Tentar novamente" primeiro consulta o resultado do
+ * `requestId` original (`store.reconcile()`, `GET /pix/requests/:id`).
+ * Se já foi resolvido, não navega sozinho — mostra o resultado encontrado
+ * e deixa o cliente decidir a próxima ação, em vez de arriscar um novo
+ * débito. Só reabre T03 automaticamente quando o resultado permanece
+ * desconhecido ou a própria consulta falha.
  */
 
 const router = useRouter();
 const store = usePixTransferStore();
 const showDetails = ref(false);
+const reconciled = ref<PixRequestStatusResponse | null>(null);
 
-function handleRetry() {
+async function handleRetry() {
+  const result = await store.reconcile();
+  if (result && result.status !== 'PENDING') {
+    reconciled.value = result;
+    return;
+  }
   router.push({ name: 't03' });
+}
+
+function handleContinue() {
+  if (!reconciled.value) return;
+  if (reconciled.value.status === 'APPROVED' && reconciled.value.transactionId) {
+    router.push({
+      name: 't04',
+      params: { transactionId: reconciled.value.transactionId },
+    });
+    return;
+  }
+  router.push({ name: 't06' });
 }
 
 function handleBack() {
   router.push({ name: 't01' });
 }
+
+const reconciledMessage = computed(() => {
+  if (reconciled.value?.status === 'APPROVED')
+    return 'Essa transação já foi aprovada.';
+  if (reconciled.value?.status === 'REVIEW')
+    return 'Essa transação já está registrada e em análise.';
+  return 'Essa transação já foi processada e não foi aprovada.';
+});
 </script>
 
 <template>
-  <AppCard title="Erro na transação">
+  <AppCard v-if="!reconciled" title="Erro na transação">
     <p class="erro-view__message">
       Não foi possível confirmar o resultado desta transação. Isso não significa
       que ela foi recusada.
@@ -75,8 +104,30 @@ function handleBack() {
     </dl>
 
     <div class="erro-view__actions">
+      <AppButton
+        variant="secondary"
+        :disabled="store.reconciling"
+        @click="handleBack"
+      >
+        Voltar
+      </AppButton>
+      <AppButton :disabled="store.reconciling" @click="handleRetry">
+        {{ store.reconciling ? 'Verificando…' : 'Tentar novamente' }}
+      </AppButton>
+    </div>
+  </AppCard>
+
+  <AppCard v-else title="Resultado encontrado">
+    <p class="erro-view__message">
+      {{ reconciledMessage }} Tentar novamente agora criaria uma nova
+      solicitação — confira o resultado antes de prosseguir.
+    </p>
+
+    <div class="erro-view__actions">
       <AppButton variant="secondary" @click="handleBack"> Voltar </AppButton>
-      <AppButton @click="handleRetry"> Tentar novamente </AppButton>
+      <AppButton @click="handleContinue">
+        {{ reconciled.status === 'APPROVED' ? 'Ver comprovante' : 'Ver no histórico' }}
+      </AppButton>
     </div>
   </AppCard>
 </template>

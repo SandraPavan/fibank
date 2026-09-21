@@ -79,6 +79,14 @@ export interface PixConfirmationResponse {
   processedAt: string;
 }
 
+export interface PixRequestStatusResponse {
+  requestId: string;
+  status: 'PENDING' | 'APPROVED' | 'REVIEW' | 'REJECTED' | 'FAILED';
+  transactionId: string | null;
+  reasonCodes: string[];
+  processedAt: string | null;
+}
+
 export interface TransactionResponse {
   transactionId: string;
   requestId: string;

@@ -332,4 +332,45 @@ describe('usePixTransferStore', () => {
       expect(JSON.stringify(store.$state)).not.toContain(password);
     });
   });
+
+  describe('reconcile (T05 — DEV-102)', () => {
+    it('não chama a API quando não há requestId', async () => {
+      const store = usePixTransferStore();
+
+      const result = await store.reconcile();
+
+      expect(result).toBeNull();
+      expect(banking.getPixRequestStatus).not.toHaveBeenCalled();
+    });
+
+    it('consulta o status do requestId atual e devolve o resultado', async () => {
+      vi.mocked(banking.getPixRequestStatus).mockResolvedValue({
+        requestId: 'req-1',
+        status: 'APPROVED',
+        transactionId: 'txn-1',
+        reasonCodes: ['WITHIN_CURRENT_RULES'],
+        processedAt: '2026-08-18T14:32:01-03:00',
+      });
+      const store = usePixTransferStore();
+      store.requestId = 'req-1';
+
+      const result = await store.reconcile();
+
+      expect(banking.getPixRequestStatus).toHaveBeenCalledWith('req-1');
+      expect(result?.status).toBe('APPROVED');
+    });
+
+    it('devolve null em vez de propagar falha de rede/timeout', async () => {
+      vi.mocked(banking.getPixRequestStatus).mockRejectedValue(
+        new RequestTimeoutError(),
+      );
+      const store = usePixTransferStore();
+      store.requestId = 'req-1';
+
+      const result = await store.reconcile();
+
+      expect(result).toBeNull();
+      expect(store.reconciling).toBe(false);
+    });
+  });
 });

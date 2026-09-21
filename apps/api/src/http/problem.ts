@@ -53,6 +53,11 @@ const problems = {
     'Intenção não encontrada',
     'A intenção PIX não foi encontrada.',
   ],
+  PIX_REQUEST_NOT_FOUND: [
+    404,
+    'Solicitação não encontrada',
+    'Nenhuma solicitação foi encontrada para o requestId informado.',
+  ],
   REQUEST_ID_CONFLICT: [
     409,
     'Conflito de idempotência',

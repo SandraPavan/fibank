@@ -4,6 +4,7 @@ import type {
   CreatePixIntentRequest,
   PixConfirmationResponse,
   PixIntentResponse,
+  PixRequestStatusResponse,
   RecipientResponse,
   TransactionPageResponse,
   TransactionResponse,
@@ -58,6 +59,16 @@ export function confirmPixIntent(
     body,
     { timeoutMs: CONFIRM_TIMEOUT_MS },
   );
+}
+
+/**
+ * DEV-102 (RP-07): consulta o resultado de um `requestId` antes de um
+ * retry após timeout (dev/04-fluxos.md — F05). Só leitura.
+ */
+export function getPixRequestStatus(
+  requestId: string,
+): Promise<PixRequestStatusResponse> {
+  return apiGet<PixRequestStatusResponse>(`/pix/requests/${requestId}`);
 }
 
 export function getTransaction(

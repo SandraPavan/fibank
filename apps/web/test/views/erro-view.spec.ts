@@ -53,7 +53,156 @@ describe('ErroView (T05)', () => {
     );
   });
 
-  it('"Tentar novamente" volta a T03 sem reconciliar automaticamente o resultado', async () => {
+  it('"Tentar novamente" consulta o status antes de decidir para onde ir (DEV-102/RP-07)', async () => {
+    const store = usePixTransferStore();
+    store.requestId = 'req-1';
+    vi.mocked(banking.getPixRequestStatus).mockResolvedValue({
+      requestId: 'req-1',
+      status: 'PENDING',
+      transactionId: null,
+      reasonCodes: [],
+      processedAt: null,
+    });
+    const { wrapper, router } = await mountView();
+
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Tentar novamente')
+      ?.trigger('click');
+    await flushPromises();
+
+    expect(banking.getPixRequestStatus).toHaveBeenCalledWith('req-1');
+    expect(router.currentRoute.value.path).toBe('/app/senha');
+  });
+
+  it('resultado já aprovado mostra o interstício e só navega ao comprovante quando o cliente confirma', async () => {
+    const store = usePixTransferStore();
+    store.requestId = 'req-1';
+    vi.mocked(banking.getPixRequestStatus).mockResolvedValue({
+      requestId: 'req-1',
+      status: 'APPROVED',
+      transactionId: 'txn-1',
+      reasonCodes: ['WITHIN_CURRENT_RULES'],
+      processedAt: '2026-08-18T14:32:01-03:00',
+    });
+    const { wrapper, router } = await mountView();
+
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Tentar novamente')
+      ?.trigger('click');
+    await flushPromises();
+
+    // Não navega sozinho: mostra o resultado e espera o cliente decidir.
+    expect(router.currentRoute.value.path).toBe('/app/erro');
+    expect(wrapper.text()).toContain('Essa transação já foi aprovada.');
+
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Ver comprovante')
+      ?.trigger('click');
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe('/app/comprovante/txn-1');
+  });
+
+  it('resultado em análise mostra o interstício e só navega ao histórico quando o cliente confirma', async () => {
+    const store = usePixTransferStore();
+    store.requestId = 'req-1';
+    vi.mocked(banking.getPixRequestStatus).mockResolvedValue({
+      requestId: 'req-1',
+      status: 'REVIEW',
+      transactionId: 'txn-1',
+      reasonCodes: ['AMOUNT_REQUIRES_REVIEW'],
+      processedAt: '2026-08-18T14:32:01-03:00',
+    });
+    const { wrapper, router } = await mountView();
+
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Tentar novamente')
+      ?.trigger('click');
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe('/app/erro');
+    expect(wrapper.text()).toContain(
+      'Essa transação já está registrada e em análise.',
+    );
+
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Ver no histórico')
+      ?.trigger('click');
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe('/app/historico');
+  });
+
+  it('resultado rejeitado/falho não é descrito como "em análise" e leva ao histórico', async () => {
+    const store = usePixTransferStore();
+    store.requestId = 'req-1';
+    vi.mocked(banking.getPixRequestStatus).mockResolvedValue({
+      requestId: 'req-1',
+      status: 'REJECTED',
+      transactionId: 'txn-1',
+      reasonCodes: ['INVALID_TRANSACTION_PASSWORD'],
+      processedAt: '2026-08-18T14:32:01-03:00',
+    });
+    const { wrapper, router } = await mountView();
+
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Tentar novamente')
+      ?.trigger('click');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain(
+      'Essa transação já foi processada e não foi aprovada.',
+    );
+    expect(wrapper.text()).not.toContain('em análise');
+
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Ver no histórico')
+      ?.trigger('click');
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe('/app/historico');
+  });
+
+  it('"Voltar" no interstício de resultado encontrado também leva para T01', async () => {
+    const store = usePixTransferStore();
+    store.requestId = 'req-1';
+    vi.mocked(banking.getPixRequestStatus).mockResolvedValue({
+      requestId: 'req-1',
+      status: 'REVIEW',
+      transactionId: 'txn-1',
+      reasonCodes: ['AMOUNT_REQUIRES_REVIEW'],
+      processedAt: '2026-08-18T14:32:01-03:00',
+    });
+    const { wrapper, router } = await mountView();
+
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Tentar novamente')
+      ?.trigger('click');
+    await flushPromises();
+
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Voltar')
+      ?.trigger('click');
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe('/app/transferir');
+  });
+
+  it('falha ao consultar o status não trava o cliente — segue para retry em T03', async () => {
+    const store = usePixTransferStore();
+    store.requestId = 'req-1';
+    vi.mocked(banking.getPixRequestStatus).mockRejectedValue(
+      new Error('network'),
+    );
     const { wrapper, router } = await mountView();
 
     await wrapper
@@ -63,9 +212,6 @@ describe('ErroView (T05)', () => {
     await flushPromises();
 
     expect(router.currentRoute.value.path).toBe('/app/senha');
-    // Preservar: nenhuma consulta ao requestId original antes do retry
-    // (RP-07 é comportamento-alvo, DEV-102, bloqueado).
-    expect(banking.getPixIntent).not.toHaveBeenCalled();
   });
 
   it('"Voltar" leva para T01', async () => {

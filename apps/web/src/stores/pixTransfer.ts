@@ -1,5 +1,6 @@
 import type {
   PixConfirmationResponse,
+  PixRequestStatusResponse,
   RecipientResponse,
 } from '@finbank/contracts';
 import { defineStore } from 'pinia';
@@ -7,6 +8,7 @@ import {
   confirmPixIntent,
   createPixIntent,
   getFrequentRecipients,
+  getPixRequestStatus,
   resolveRecipient,
   updatePixIntent,
 } from '../api/banking';
@@ -32,6 +34,7 @@ interface PixTransferState {
    */
   confirmOutcome: 'known-error' | 'unknown-result' | null;
   lastConfirmation: PixConfirmationResponse | null;
+  reconciling: boolean;
 }
 
 /**
@@ -55,6 +58,7 @@ export const usePixTransferStore = defineStore('pixTransfer', {
     confirmError: null,
     confirmOutcome: null,
     lastConfirmation: null,
+    reconciling: false,
   }),
   actions: {
     async loadFrequentRecipients() {
@@ -175,6 +179,25 @@ export const usePixTransferStore = defineStore('pixTransfer', {
         return null;
       } finally {
         this.confirming = false;
+      }
+    },
+
+    /**
+     * Consulta o resultado do `requestId` atual antes de um retry a partir
+     * de T05 (DEV-102, RP-07 — dev/04-fluxos.md F05). Só leitura: nunca
+     * confirma nem cria nada. Se a consulta falhar (rede/timeout), devolve
+     * `null` e quem chamou decide seguir com o retry de qualquer forma —
+     * a reconciliação não pode travar o cliente.
+     */
+    async reconcile(): Promise<PixRequestStatusResponse | null> {
+      if (!this.requestId) return null;
+      this.reconciling = true;
+      try {
+        return await getPixRequestStatus(this.requestId);
+      } catch {
+        return null;
+      } finally {
+        this.reconciling = false;
       }
     },
   },
