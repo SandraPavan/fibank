@@ -1,8 +1,18 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
+import type { WorkspaceMetricsResponse } from '@finbank/contracts';
 import { PrismaService } from '../database/prisma.service';
 import { initialize, reset } from '../database/seed';
 import { ApiProblem } from '../http/problem';
+import {
+  DomainRepository,
+  PERSISTENCE_RUNTIME,
+  type PersistenceRuntime,
+} from '../repositories/domain.repository';
+import {
+  PIX_REVIEW_SLA_CONFIG,
+  type PixReviewSlaConfig,
+} from '../transactions/pix-review-sla.config';
 import { WorkspaceRepository } from './workspace.repository';
 import { DEFAULT_WORKSPACE_ID } from './workspace-context';
 
@@ -49,6 +59,10 @@ export class FacilitatorService {
     @Inject(PrismaService) private readonly db: PrismaService,
     @Inject(WorkspaceRepository)
     private readonly workspaces: WorkspaceRepository,
+    @Inject(DomainRepository) private readonly repository: DomainRepository,
+    @Inject(PERSISTENCE_RUNTIME) private readonly runtime: PersistenceRuntime,
+    @Inject(PIX_REVIEW_SLA_CONFIG)
+    private readonly slaConfig: PixReviewSlaConfig,
   ) {}
 
   /** Cria o grupo e já entrega uma baseline pronta (mesma fixture de sempre, isolada por workspace). */
@@ -76,6 +90,21 @@ export class FacilitatorService {
       groupSlug: workspace.groupSlug,
       createdAt: workspace.createdAt.toISOString(),
     }));
+  }
+
+  /**
+   * DEV-103 (porção facilitador): snapshot atual por workspace, para
+   * consumo do painel do facilitador (DEV-104). Nunca exposto ao
+   * participante — só sob `X-Facilitator-Secret` (`FacilitatorGuard`).
+   */
+  async metrics(groupSlug: string): Promise<WorkspaceMetricsResponse> {
+    const workspace = await this.resolve(groupSlug);
+    const counts = await this.repository.transactionMetrics(
+      workspace.workspaceId,
+      this.runtime.now(),
+      this.slaConfig.reviewSlaMs,
+    );
+    return { groupSlug: workspace.groupSlug, ...counts };
   }
 
   private async resolve(

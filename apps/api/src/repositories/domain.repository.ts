@@ -1,6 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import type { TransactionQuery } from '../transactions/transaction-query.domain';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../database/prisma.service';
 import { hashPassword, validateRegistration } from '../database/password';
@@ -70,6 +70,14 @@ function withoutPhysicalId<T extends { id: string; workspaceId: string }>(
  */
 @Injectable()
 export class DomainRepository {
+  /**
+   * DEV-103 (GAP06/RISK-04, porção facilitador): loga criação de intenção
+   * e de transação com `workspaceId`, `requestId`, `accountId` e
+   * `deviceId` (dev/02-arquitetura.md: "logs incluem workspaceId e
+   * requestId"). Só consumido por operação/observabilidade do facilitador
+   * — não expõe nenhum campo novo no contrato público de transação.
+   */
+  private readonly logger = new Logger(DomainRepository.name);
   constructor(
     @Inject(PrismaService) private readonly db: PrismaService,
     @Inject(PERSISTENCE_RUNTIME)
@@ -80,7 +88,12 @@ export class DomainRepository {
     action: (unit: ConfirmationUnit) => Promise<T>,
     workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<T> {
-    return this.db.$transaction(async (tx) =>
+    // DEV-103: `created` só é lido depois que `$transaction` resolve com
+    // sucesso — logar de dentro da closure logaria uma criação que o
+    // Mongo ainda pode reverter (ex.: falha num passo posterior do mesmo
+    // `action`).
+    let created: Transaction | undefined;
+    const result = await this.db.$transaction(async (tx) =>
       action({
         account: async (profileId) => {
           const row = await tx.account.findUnique({
@@ -121,9 +134,20 @@ export class DomainRepository {
           await tx.transaction.create({
             data: { ...transaction, workspaceId },
           });
+          created = transaction;
         },
       }),
     );
+    if (created)
+      this.logger.log({
+        event: 'pix_transaction_created',
+        workspaceId,
+        requestId: created.requestId,
+        accountId: created.accountId,
+        deviceId: created.deviceId,
+        status: created.status,
+      });
+    return result;
   }
 
   async register(
@@ -256,7 +280,17 @@ export class DomainRepository {
           createdAt: input.createdAt ?? this.runtime.now(),
         },
       })
-      .then(withoutPhysicalId);
+      .then(withoutPhysicalId)
+      .then((intent) => {
+        this.logger.log({
+          event: 'pix_intent_created',
+          workspaceId,
+          requestId: intent.requestId,
+          accountId: intent.accountId,
+          deviceId: intent.deviceId,
+        });
+        return intent;
+      });
   }
   async intents(
     accountId: string,
@@ -362,5 +396,42 @@ export class DomainRepository {
     return this.db.transaction
       .findFirst({ where: { workspaceId, accountId, transactionId } })
       .then((row) => row && withoutPhysicalId(row));
+  }
+  /**
+   * DEV-103 (porção facilitador): contagem por status para todo o
+   * workspace, consumida só pelo painel reservado do facilitador
+   * (nunca pelo contrato público de transação do participante).
+   */
+  async transactionMetrics(
+    workspaceId: string,
+    now: Date,
+    reviewSlaMs: number,
+  ): Promise<{
+    approved: number;
+    review: number;
+    reviewSlaBreached: number;
+    rejected: number;
+    failed: number;
+  }> {
+    const slaCutoff = new Date(now.getTime() - reviewSlaMs);
+    const [approved, review, reviewSlaBreached, rejected, failed] =
+      await Promise.all([
+        this.db.transaction.count({
+          where: { workspaceId, status: 'APPROVED' },
+        }),
+        this.db.transaction.count({ where: { workspaceId, status: 'REVIEW' } }),
+        this.db.transaction.count({
+          where: {
+            workspaceId,
+            status: 'REVIEW',
+            createdAt: { lt: slaCutoff },
+          },
+        }),
+        this.db.transaction.count({
+          where: { workspaceId, status: 'REJECTED' },
+        }),
+        this.db.transaction.count({ where: { workspaceId, status: 'FAILED' } }),
+      ]);
+    return { approved, review, reviewSlaBreached, rejected, failed };
   }
 }

@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import { spec, settings } from 'pactum';
 import type { INestApplication } from '@nestjs/common';
 import type { AddressInfo } from 'node:net';
@@ -7,7 +7,12 @@ import type { ProfileResponse } from '@finbank/contracts';
 import { createApiApplication } from '../src/bootstrap';
 import { PrismaService } from '../src/database/prisma.service';
 import { reset } from '../src/database/seed';
-import { DomainRepository } from '../src/repositories/domain.repository';
+import { transactions } from '../src/database/fixtures';
+import {
+  DomainRepository,
+  PERSISTENCE_RUNTIME,
+  type PersistenceRuntime,
+} from '../src/repositories/domain.repository';
 import { DEFAULT_WORKSPACE_ID } from '../src/workspace/workspace-context';
 
 // Mesmo default de `facilitator.guard.ts` quando `FACILITATOR_ACCESS_CODE` não é
@@ -19,6 +24,9 @@ let db: PrismaService;
 let repo: DomainRepository;
 let app: INestApplication;
 let base: string;
+// DEV-103 (porção facilitador): fixa o relógio para que `reviewSlaBreached`
+// das métricas seja determinístico.
+const now = new Date('2026-08-18T15:00:00Z');
 settings.setLogLevel('SILENT');
 
 beforeAll(async () => {
@@ -27,6 +35,10 @@ beforeAll(async () => {
   app = await createApiApplication();
   db = app.get(PrismaService);
   repo = app.get(DomainRepository);
+  vi.spyOn(
+    app.get<PersistenceRuntime>(PERSISTENCE_RUNTIME),
+    'now',
+  ).mockImplementation(() => now);
   await reset(db, {
     WORKSHOP_MODE: 'true',
     DATABASE_URL: process.env.DATABASE_URL,
@@ -45,6 +57,7 @@ beforeAll(async () => {
   base = `http://127.0.0.1:${(app.getHttpServer().address() as AddressInfo).port}/api/v1`;
 });
 afterAll(async () => {
+  vi.restoreAllMocks();
   await app?.close();
 });
 
@@ -202,4 +215,83 @@ it('join exige grupo e código válidos; facilitador exige o segredo', async () 
     .post(`${base}/facilitator/workspaces`)
     .withJson({ groupSlug: 'grupo-auth' })
     .expectStatus(409);
+});
+
+it('DEV-103: métricas do facilitador contam por status e por workspace, sem vazar entre grupos', async () => {
+  await createGroup('grupo-metricas-a');
+  await createGroup('grupo-metricas-b');
+  const workspaceA = await db.workspace.findFirstOrThrow({
+    where: { groupSlug: 'grupo-metricas-a' },
+  });
+
+  // Toda criação de grupo já semeia a mesma fixture base (`initialize`);
+  // substitui por um conjunto controlado para números exatos e previsíveis.
+  await db.transaction.deleteMany({
+    where: { workspaceId: workspaceA.workspaceId },
+  });
+  await db.transaction.createMany({
+    data: [
+      {
+        ...transactions[0]!,
+        workspaceId: workspaceA.workspaceId,
+        transactionId: 'TXN-metrics-approved',
+        requestId: 'REQ-metrics-approved',
+        status: 'APPROVED',
+      },
+      {
+        ...transactions[0]!,
+        workspaceId: workspaceA.workspaceId,
+        transactionId: 'TXN-metrics-review-fresh',
+        requestId: 'REQ-metrics-review-fresh',
+        status: 'REVIEW',
+        createdAt: new Date(now.getTime() - 60 * 1000),
+      },
+      {
+        ...transactions[0]!,
+        workspaceId: workspaceA.workspaceId,
+        transactionId: 'TXN-metrics-review-stale',
+        requestId: 'REQ-metrics-review-stale',
+        status: 'REVIEW',
+        createdAt: new Date(now.getTime() - 25 * 60 * 60 * 1000),
+      },
+      {
+        ...transactions[0]!,
+        workspaceId: workspaceA.workspaceId,
+        transactionId: 'TXN-metrics-rejected',
+        requestId: 'REQ-metrics-rejected',
+        status: 'REJECTED',
+      },
+    ],
+  });
+
+  const metricsA = await facilitator()
+    .get(`${base}/facilitator/workspaces/grupo-metricas-a/metrics`)
+    .expectStatus(200);
+  expect(metricsA.body).toEqual({
+    groupSlug: 'grupo-metricas-a',
+    approved: 1,
+    review: 2,
+    reviewSlaBreached: 1,
+    rejected: 1,
+    failed: 0,
+  });
+
+  // grupo-metricas-b nunca teve `Transaction` tocada aqui — só a fixture
+  // base semeada por `initialize` (3 aprovadas, 1 review com 22h, 1 falha).
+  // Nada do grupo A aparece aqui.
+  const metricsB = await facilitator()
+    .get(`${base}/facilitator/workspaces/grupo-metricas-b/metrics`)
+    .expectStatus(200);
+  expect(metricsB.body).toEqual({
+    groupSlug: 'grupo-metricas-b',
+    approved: 3,
+    review: 1,
+    reviewSlaBreached: 0,
+    rejected: 0,
+    failed: 1,
+  });
+
+  await facilitator()
+    .get(`${base}/facilitator/workspaces/grupo-inexistente/metrics`)
+    .expectStatus(404);
 });

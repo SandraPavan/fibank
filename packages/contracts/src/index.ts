@@ -99,6 +99,21 @@ export interface TransactionPageResponse {
   totalPages: number;
 }
 
+export interface WorkspaceMetricsResponse {
+  groupSlug: string;
+  approved: number;
+  review: number;
+  reviewSlaBreached: number;
+  rejected: number;
+  failed: number;
+}
+
+export interface WorkspaceSummaryResponse {
+  workspaceId: string;
+  groupSlug: string;
+  createdAt: string;
+}
+
 export interface JoinSessionRequest {
   groupSlug: string;
   code: string;

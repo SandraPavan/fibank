@@ -17,6 +17,7 @@ describe('router', () => {
     ['t03', '/app/senha'],
     ['t05', '/app/erro'],
     ['t06', '/app/historico'],
+    ['facilitator', '/facilitator'],
   ])('resolve a rota %s em %s', async (name, path) => {
     const router = createFinBankRouter(createMemoryHistory());
     await router.push({ name });
