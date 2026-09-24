@@ -94,8 +94,30 @@ describe('useFacilitatorStore', () => {
     await store.refresh();
 
     expect(store.workspaces).toEqual([
-      { ...workspaceA, metrics: { groupSlug: 'grupo-a', approved: 1, review: 2, reviewSlaBreached: 0, rejected: 0, failed: 0 }, metricsError: null },
-      { ...workspaceB, metrics: { groupSlug: 'grupo-b', approved: 1, review: 2, reviewSlaBreached: 0, rejected: 0, failed: 0 }, metricsError: null },
+      {
+        ...workspaceA,
+        metrics: {
+          groupSlug: 'grupo-a',
+          approved: 1,
+          review: 2,
+          reviewSlaBreached: 0,
+          rejected: 0,
+          failed: 0,
+        },
+        metricsError: null,
+      },
+      {
+        ...workspaceB,
+        metrics: {
+          groupSlug: 'grupo-b',
+          approved: 1,
+          review: 2,
+          reviewSlaBreached: 0,
+          rejected: 0,
+          failed: 0,
+        },
+        metricsError: null,
+      },
     ]);
     expect(store.loadError).toBeNull();
   });
@@ -145,7 +167,9 @@ describe('useFacilitatorStore', () => {
     await store.refresh();
 
     expect(store.isAuthenticated).toBe(false);
-    expect(store.authError).toBe('Segredo inválido ou expirado. Entre novamente.');
+    expect(store.authError).toBe(
+      'Segredo inválido ou expirado. Entre novamente.',
+    );
   });
 
   it('logout limpa todo o estado, inclusive o segredo em memória', async () => {

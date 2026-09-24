@@ -18,7 +18,9 @@ async function mountView() {
   return { wrapper, router };
 }
 
-async function login(wrapper: Awaited<ReturnType<typeof mountView>>['wrapper']) {
+async function login(
+  wrapper: Awaited<ReturnType<typeof mountView>>['wrapper'],
+) {
   await wrapper.find('input[type="password"]').setValue('segredo-certo');
   await wrapper.find('form').trigger('submit');
   await flushPromises();
@@ -56,7 +58,11 @@ describe('FacilitatorView (DEV-104)', () => {
 
   it('segredo válido carrega grupos e métricas agregadas', async () => {
     vi.mocked(facilitatorApi.listFacilitatorWorkspaces).mockResolvedValue([
-      { workspaceId: 'WS-a', groupSlug: 'grupo-a', createdAt: '2026-08-18T14:00:00-03:00' },
+      {
+        workspaceId: 'WS-a',
+        groupSlug: 'grupo-a',
+        createdAt: '2026-08-18T14:00:00-03:00',
+      },
     ]);
     vi.mocked(facilitatorApi.getWorkspaceMetrics).mockResolvedValue({
       groupSlug: 'grupo-a',
@@ -101,7 +107,11 @@ describe('FacilitatorView (DEV-104)', () => {
 
   it('REVIEW: montar já autenticado (ex.: voltar de outra rota) retoma refresh e polling', async () => {
     vi.mocked(facilitatorApi.listFacilitatorWorkspaces).mockResolvedValue([
-      { workspaceId: 'WS-a', groupSlug: 'grupo-a', createdAt: '2026-08-18T14:00:00-03:00' },
+      {
+        workspaceId: 'WS-a',
+        groupSlug: 'grupo-a',
+        createdAt: '2026-08-18T14:00:00-03:00',
+      },
     ]);
     vi.mocked(facilitatorApi.getWorkspaceMetrics).mockResolvedValue({
       groupSlug: 'grupo-a',

@@ -96,7 +96,11 @@ onBeforeUnmount(stopPolling);
       </form>
     </AppCard>
 
-    <AppCard v-else title="Painel do facilitador" class="facilitator-view__card">
+    <AppCard
+      v-else
+      title="Painel do facilitador"
+      class="facilitator-view__card"
+    >
       <div class="facilitator-view__header">
         <p class="facilitator-view__subtitle">
           Dados agregados por grupo, sem detalhe individual de participante.
@@ -121,7 +125,9 @@ onBeforeUnmount(stopPolling);
           :key="workspace.workspaceId"
           class="facilitator-view__item"
         >
-          <h3 class="facilitator-view__item-title">{{ workspace.groupSlug }}</h3>
+          <h3 class="facilitator-view__item-title">
+            {{ workspace.groupSlug }}
+          </h3>
           <dl v-if="workspace.metrics" class="facilitator-view__metrics">
             <div>
               <dt>Aprovadas</dt>

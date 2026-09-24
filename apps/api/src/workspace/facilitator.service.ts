@@ -93,10 +93,11 @@ export class FacilitatorService {
   }
 
   /**
-   * DEV-103: snapshot atual por workspace, para consumo futuro do painel
-   * do facilitador (DEV-104, não implementado aqui). Reaproveita o mesmo
-   * `now`/limiar de SLA que `TransactionService` usa na resposta pública
-   * de T06, para não divergir do que os grupos veem.
+   * DEV-103: snapshot atual por workspace, para consumo do painel do
+   * facilitador (DEV-104). Reaproveita o mesmo `now`/limiar de SLA que
+   * `TransactionService` usa na resposta pública de T06, para não
+   * divergir do que os grupos veem. Nunca exposto ao participante — só
+   * sob `X-Facilitator-Secret` (`FacilitatorGuard`).
    */
   async metrics(groupSlug: string): Promise<WorkspaceMetricsResponse> {
     const workspace = await this.resolve(groupSlug);

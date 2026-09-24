@@ -2,7 +2,10 @@ export const PIX_REVIEW_SLA_CONFIG = Symbol('PIX_REVIEW_SLA_CONFIG');
 export interface PixReviewSlaConfig {
   readonly reviewSlaMs: number;
 }
-function parsePositiveInteger(raw: string | undefined, fallback: number): number {
+function parsePositiveInteger(
+  raw: string | undefined,
+  fallback: number,
+): number {
   const value = raw === undefined ? fallback : Number(raw);
   if (
     (raw !== undefined && !/^[0-9]+$/.test(raw)) ||
@@ -24,6 +27,9 @@ export function parsePixReviewSlaConfig(
   },
 ): PixReviewSlaConfig {
   return Object.freeze({
-    reviewSlaMs: parsePositiveInteger(env.PIX_REVIEW_SLA_MS, 24 * 60 * 60 * 1000),
+    reviewSlaMs: parsePositiveInteger(
+      env.PIX_REVIEW_SLA_MS,
+      24 * 60 * 60 * 1000,
+    ),
   });
 }

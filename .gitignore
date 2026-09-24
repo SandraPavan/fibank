@@ -7,6 +7,7 @@ coverage/
 *.log
 .DS_Store
 reports/
+artifacts/test-reports/
 apps/web/cypress/screenshots/
 apps/web/cypress/videos/
 apps/web/cypress/downloads/

@@ -9,17 +9,17 @@ describe('parsePixReviewSlaConfig', () => {
   });
 
   it('aceita um limiar configurado', () => {
-    expect(
-      parsePixReviewSlaConfig({ PIX_REVIEW_SLA_MS: '3600000' }),
-    ).toEqual({ reviewSlaMs: 3600000 });
+    expect(parsePixReviewSlaConfig({ PIX_REVIEW_SLA_MS: '3600000' })).toEqual({
+      reviewSlaMs: 3600000,
+    });
   });
 
   it.each(['0', '-1', 'abc', '1.5', ''])(
     'rejeita valores inválidos: %s',
     (raw) => {
-      expect(() =>
-        parsePixReviewSlaConfig({ PIX_REVIEW_SLA_MS: raw }),
-      ).toThrow('Configuração de SLA inválida.');
+      expect(() => parsePixReviewSlaConfig({ PIX_REVIEW_SLA_MS: raw })).toThrow(
+        'Configuração de SLA inválida.',
+      );
     },
   );
 });

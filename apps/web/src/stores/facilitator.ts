@@ -3,7 +3,10 @@ import type {
   WorkspaceSummaryResponse,
 } from '@finbank/contracts';
 import { defineStore } from 'pinia';
-import { getWorkspaceMetrics, listFacilitatorWorkspaces } from '../api/facilitator';
+import {
+  getWorkspaceMetrics,
+  listFacilitatorWorkspaces,
+} from '../api/facilitator';
 import { ApiError } from '../api/http';
 
 export interface WorkspaceOverview extends WorkspaceSummaryResponse {

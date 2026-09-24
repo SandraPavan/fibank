@@ -226,7 +226,9 @@ it('DEV-103: métricas do facilitador contam por status e por workspace, sem vaz
 
   // Toda criação de grupo já semeia a mesma fixture base (`initialize`);
   // substitui por um conjunto controlado para números exatos e previsíveis.
-  await db.transaction.deleteMany({ where: { workspaceId: workspaceA.workspaceId } });
+  await db.transaction.deleteMany({
+    where: { workspaceId: workspaceA.workspaceId },
+  });
   await db.transaction.createMany({
     data: [
       {
