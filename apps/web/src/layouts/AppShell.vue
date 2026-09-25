@@ -7,6 +7,7 @@ interface NavItem {
 const navItems: readonly NavItem[] = [
   { to: { name: 't01' }, label: 'Transferir' },
   { to: { name: 't06' }, label: 'Histórico' },
+  { to: { name: 'relatorios' }, label: 'Relatórios' },
 ];
 </script>
 

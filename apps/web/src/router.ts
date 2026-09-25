@@ -6,6 +6,7 @@ import FacilitatorView from './views/FacilitatorView.vue';
 import HistoricoView from './views/HistoricoView.vue';
 import JoinView from './views/JoinView.vue';
 import LoginView from './views/LoginView.vue';
+import RelatoriosView from './views/RelatoriosView.vue';
 import RevisarView from './views/RevisarView.vue';
 import SenhaView from './views/SenhaView.vue';
 import TransferirView from './views/TransferirView.vue';
@@ -40,6 +41,11 @@ export function createFinBankRouter(
           },
           { path: 'erro', name: 't05', component: ErroView },
           { path: 'historico', name: 't06', component: HistoricoView },
+          {
+            path: 'relatorios',
+            name: 'relatorios',
+            component: RelatoriosView,
+          },
         ],
       },
     ],
