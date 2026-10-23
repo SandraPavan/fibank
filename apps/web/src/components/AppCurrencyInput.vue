@@ -5,6 +5,8 @@ import { digitsToCents, formatCents } from '../lib/currency';
 defineProps<{
   label: string;
   errorMessage?: string;
+  /** Aplicado no `<input>` (não no wrapper) para seletores E2E. */
+  testId?: string;
 }>();
 
 const cents = defineModel<number>({ default: 0 });
@@ -26,6 +28,7 @@ function handleInput(event: Event) {
       class="app-currency-input__field"
       type="text"
       inputmode="numeric"
+      :data-testid="testId"
       :value="formatCents(cents)"
       :aria-invalid="Boolean(errorMessage)"
       :aria-describedby="errorMessage ? errorId : undefined"

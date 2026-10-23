@@ -71,15 +71,21 @@ async function handleConfirm() {
 </script>
 
 <template>
-  <AppCard v-if="store.recipient" title="Confirmar com senha">
+  <AppCard
+    v-if="store.recipient"
+    title="Confirmar com senha"
+    data-testid="senha-card"
+  >
     <dl class="senha-view__summary">
       <div>
         <dt>Favorecido</dt>
-        <dd>{{ store.recipient.name }}</dd>
+        <dd data-testid="senha-favorecido">{{ store.recipient.name }}</dd>
       </div>
       <div>
         <dt>Valor</dt>
-        <dd>{{ formatCents(store.amountCents) }}</dd>
+        <dd data-testid="senha-valor">
+          {{ formatCents(store.amountCents) }}
+        </dd>
       </div>
     </dl>
 
@@ -89,10 +95,19 @@ async function handleConfirm() {
 
     <AppPinPad v-model="digits" :disabled="store.confirming" />
 
-    <p v-if="store.confirmError" class="senha-view__error" role="alert">
+    <p
+      v-if="store.confirmError"
+      class="senha-view__error"
+      role="alert"
+      data-testid="senha-erro"
+    >
       {{ store.confirmError }}
     </p>
-    <output v-if="reviewMessage" class="senha-view__review">
+    <output
+      v-if="reviewMessage"
+      class="senha-view__review"
+      data-testid="senha-em-analise"
+    >
       {{ reviewMessage }}
     </output>
 
@@ -100,11 +115,16 @@ async function handleConfirm() {
       <AppButton
         variant="secondary"
         :disabled="store.confirming"
+        data-testid="senha-cancelar-button"
         @click="handleCancel"
       >
         Cancelar
       </AppButton>
-      <AppButton :disabled="!canConfirm" @click="handleConfirm">
+      <AppButton
+        :disabled="!canConfirm"
+        data-testid="senha-confirmar-button"
+        @click="handleConfirm"
+      >
         {{ store.confirming ? 'Confirmando…' : 'Confirmar transação' }}
       </AppButton>
     </div>

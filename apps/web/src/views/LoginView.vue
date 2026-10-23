@@ -23,7 +23,7 @@ function handleSubmit() {
 
 <template>
   <div class="login-view">
-    <AppCard title="Entrar" class="login-view__card">
+    <AppCard title="Entrar" class="login-view__card" data-testid="login-card">
       <p class="login-view__subtitle">FinBank PIX Seguro</p>
       <form class="login-view__form" @submit.prevent="handleSubmit">
         <AppInput
@@ -31,14 +31,22 @@ function handleSubmit() {
           label="E-mail"
           type="email"
           autocomplete="username"
+          test-id="login-email-input"
         />
         <AppInput
           v-model="password"
           label="Senha"
           type="password"
           autocomplete="current-password"
+          test-id="login-senha-input"
         />
-        <AppButton type="submit" class="login-view__submit"> Entrar </AppButton>
+        <AppButton
+          type="submit"
+          class="login-view__submit"
+          data-testid="login-entrar-button"
+        >
+          Entrar
+        </AppButton>
       </form>
     </AppCard>
     <p class="login-view__footer">© 2026 FinBank</p>

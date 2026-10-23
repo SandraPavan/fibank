@@ -21,7 +21,11 @@ function backspace() {
 
 <template>
   <div class="app-pin-pad">
-    <div class="app-pin-pad__dots" role="presentation">
+    <div
+      class="app-pin-pad__dots"
+      role="presentation"
+      data-testid="pin-pad-dots"
+    >
       <span
         v-for="index in LENGTH"
         :key="index"
@@ -36,6 +40,7 @@ function backspace() {
         :key="digit"
         type="button"
         class="app-pin-pad__key"
+        :data-testid="`pin-pad-key-${digit}`"
         :disabled="disabled"
         @click="press(digit)"
       >
@@ -45,6 +50,7 @@ function backspace() {
       <button
         type="button"
         class="app-pin-pad__key"
+        data-testid="pin-pad-key-0"
         :disabled="disabled"
         @click="press('0')"
       >
@@ -55,6 +61,7 @@ function backspace() {
         class="app-pin-pad__key"
         :disabled="disabled || digits.length === 0"
         aria-label="Apagar dígito"
+        data-testid="pin-pad-backspace"
         @click="backspace"
       >
         ⌫

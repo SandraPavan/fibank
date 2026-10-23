@@ -37,7 +37,7 @@ function handleBack() {
 </script>
 
 <template>
-  <AppCard title="Erro na transação">
+  <AppCard title="Erro na transação" data-testid="erro-card">
     <p class="erro-view__message">
       Não foi possível confirmar o resultado desta transação. Isso não significa
       que ela foi recusada.
@@ -47,12 +47,17 @@ function handleBack() {
       type="button"
       class="erro-view__toggle"
       :aria-expanded="showDetails"
+      data-testid="erro-detalhes-toggle"
       @click="showDetails = !showDetails"
     >
       {{ showDetails ? 'Ocultar detalhes do erro' : 'Ver detalhes do erro' }}
     </button>
 
-    <dl v-if="showDetails" class="erro-view__details">
+    <dl
+      v-if="showDetails"
+      class="erro-view__details"
+      data-testid="erro-detalhes"
+    >
       <div>
         <dt>Código de referência</dt>
         <dd>{{ store.requestId ?? 'não disponível' }}</dd>
@@ -75,8 +80,19 @@ function handleBack() {
     </dl>
 
     <div class="erro-view__actions">
-      <AppButton variant="secondary" @click="handleBack"> Voltar </AppButton>
-      <AppButton @click="handleRetry"> Tentar novamente </AppButton>
+      <AppButton
+        variant="secondary"
+        data-testid="erro-voltar-button"
+        @click="handleBack"
+      >
+        Voltar
+      </AppButton>
+      <AppButton
+        data-testid="erro-tentar-novamente-button"
+        @click="handleRetry"
+      >
+        Tentar novamente
+      </AppButton>
     </div>
   </AppCard>
 </template>

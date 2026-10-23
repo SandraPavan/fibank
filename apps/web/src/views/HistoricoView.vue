@@ -146,8 +146,12 @@ onMounted(() => {
 </script>
 
 <template>
-  <AppCard title="Histórico de transações">
-    <output v-if="attentionIds.size > 0" class="historico-view__attention">
+  <AppCard title="Histórico de transações" data-testid="historico-card">
+    <output
+      v-if="attentionIds.size > 0"
+      class="historico-view__attention"
+      data-testid="historico-atencao"
+    >
       <span aria-hidden="true">⚠</span>
       <span>{{ attentionIds.size }} item(ns) exigem atenção nesta página.</span>
     </output>
@@ -157,6 +161,7 @@ onMounted(() => {
         v-model="search"
         label="Buscar (ID ou contraparte)"
         autocomplete="off"
+        test-id="historico-busca-input"
       />
 
       <div class="historico-view__field">
@@ -167,6 +172,7 @@ onMounted(() => {
           id="historico-status"
           v-model="status"
           class="historico-view__select"
+          data-testid="historico-status-select"
         >
           <option
             v-for="option in STATUS_OPTIONS"
@@ -184,6 +190,7 @@ onMounted(() => {
           id="historico-type"
           v-model="type"
           class="historico-view__select"
+          data-testid="historico-tipo-select"
         >
           <option value="">Todos os tipos</option>
           <option value="PIX">PIX</option>
@@ -196,6 +203,7 @@ onMounted(() => {
           id="historico-from"
           v-model="from"
           class="historico-view__select"
+          data-testid="historico-de-input"
           type="date"
         />
       </div>
@@ -206,29 +214,45 @@ onMounted(() => {
           id="historico-to"
           v-model="to"
           class="historico-view__select"
+          data-testid="historico-ate-input"
           type="date"
         />
       </div>
 
       <div class="historico-view__filter-actions">
-        <AppButton variant="secondary" type="button" @click="clearFilters">
+        <AppButton
+          variant="secondary"
+          type="button"
+          data-testid="historico-limpar-button"
+          @click="clearFilters"
+        >
           Limpar filtros
         </AppButton>
-        <AppButton type="submit"> Aplicar filtros </AppButton>
+        <AppButton type="submit" data-testid="historico-aplicar-button">
+          Aplicar filtros
+        </AppButton>
       </div>
     </form>
 
-    <p v-if="errorMessage" class="historico-view__error" role="alert">
+    <p
+      v-if="errorMessage"
+      class="historico-view__error"
+      role="alert"
+      data-testid="historico-erro"
+    >
       {{ errorMessage }}
     </p>
     <p v-else-if="loading">Carregando histórico…</p>
-    <p v-else-if="items.length === 0">Nenhuma transação encontrada.</p>
+    <p v-else-if="items.length === 0" data-testid="historico-vazio">
+      Nenhuma transação encontrada.
+    </p>
 
-    <ul v-else class="historico-view__list">
+    <ul v-else class="historico-view__list" data-testid="historico-lista">
       <li
         v-for="item in items"
         :key="item.transactionId"
         class="historico-view__row"
+        :data-testid="`historico-item-${item.transactionId}`"
       >
         <div class="historico-view__row-main">
           <span class="historico-view__recipient">{{
@@ -263,10 +287,15 @@ onMounted(() => {
       </li>
     </ul>
 
-    <div v-if="pageResult" class="historico-view__pagination">
+    <div
+      v-if="pageResult"
+      class="historico-view__pagination"
+      data-testid="historico-paginacao"
+    >
       <AppButton
         variant="secondary"
         :disabled="page <= 1"
+        data-testid="historico-anterior-button"
         @click="goToPreviousPage"
       >
         Anterior
@@ -278,6 +307,7 @@ onMounted(() => {
       <AppButton
         variant="secondary"
         :disabled="page >= pageResult.totalPages"
+        data-testid="historico-proxima-button"
         @click="goToNextPage"
       >
         Próxima

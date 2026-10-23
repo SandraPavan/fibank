@@ -2,12 +2,13 @@
 interface NavItem {
   readonly to: { readonly name: string };
   readonly label: string;
+  readonly testId: string;
 }
 
 const navItems: readonly NavItem[] = [
-  { to: { name: 't01' }, label: 'Transferir' },
-  { to: { name: 't06' }, label: 'Histórico' },
-  { to: { name: 'relatorios' }, label: 'Relatórios' },
+  { to: { name: 't01' }, label: 'Transferir', testId: 'nav-transferir' },
+  { to: { name: 't06' }, label: 'Histórico', testId: 'nav-historico' },
+  { to: { name: 'relatorios' }, label: 'Relatórios', testId: 'nav-relatorios' },
 ];
 </script>
 
@@ -17,7 +18,11 @@ const navItems: readonly NavItem[] = [
       <p class="app-shell__brand">FinBank</p>
       <ul class="app-shell__nav-list">
         <li v-for="item in navItems" :key="item.label">
-          <RouterLink class="app-shell__nav-link" :to="item.to">
+          <RouterLink
+            class="app-shell__nav-link"
+            :to="item.to"
+            :data-testid="item.testId"
+          >
             {{ item.label }}
           </RouterLink>
         </li>

@@ -10,6 +10,11 @@ declare global {
        * teste parte de um estado conhecido, independente de ordem.
        */
       resetWorkshop(): Chainable<Cypress.Response<unknown>>;
+      /**
+       * Localiza elemento pelo `data-testid` (DEV-035), convenção
+       * `<tela>-<elemento>` documentada em dev/06-estrategia-de-testes.md.
+       */
+      getByTestId(testId: string): Chainable<JQuery<HTMLElement>>;
       /** Localiza o `<input>` associado a um `<label>` de AppInput/AppCurrencyInput. */
       inputByLabel(label: string): Chainable<JQuery<HTMLInputElement>>;
       /**
@@ -29,6 +34,10 @@ declare global {
 
 Cypress.Commands.add('resetWorkshop', () =>
   cy.request('POST', '/api/v1/simulation/reset'),
+);
+
+Cypress.Commands.add('getByTestId', (testId: string) =>
+  cy.get(`[data-testid="${testId}"]`),
 );
 
 Cypress.Commands.add('inputByLabel', (label: string) =>

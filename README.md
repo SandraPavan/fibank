@@ -392,6 +392,10 @@ Cada teste chama `cy.resetWorkshop()` (`POST /api/v1/simulation/reset`, do
 `SimulationModule` da DEV-040) antes de rodar, restaurando as fixtures base —
 a ordem de execução não importa e reexecuções não acumulam estado.
 
+Para localizar elementos, prefira `cy.getByTestId('<id>')`. A convenção de
+nomes, como adicionar `data-testid` em telas e componentes novos e o catálogo
+dos IDs existentes estão em [`docs/seletores-e2e.md`](docs/seletores-e2e.md).
+
 `cypress run` precisa de um navegador real. Em ambientes sem GUI utilizável
 o binário padrão (Electron embutido) pode falhar ao iniciar; nesse caso tente
 `npx cypress run --browser chrome --project apps/web` com o Google Chrome

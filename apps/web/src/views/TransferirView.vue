@@ -56,8 +56,12 @@ async function handleSubmit() {
 </script>
 
 <template>
-  <AppCard title="Transferir">
-    <p v-if="account" class="transferir-view__balance">
+  <AppCard title="Transferir" data-testid="transferir-card">
+    <p
+      v-if="account"
+      class="transferir-view__balance"
+      data-testid="transferir-saldo"
+    >
       Saldo disponível: <strong>{{ formatCents(account.balanceCents) }}</strong>
     </p>
 
@@ -66,26 +70,45 @@ async function handleSubmit() {
         v-model="pixKeyModel"
         label="Chave PIX do destinatário"
         autocomplete="off"
+        test-id="transferir-chave-input"
       />
-      <p v-if="store.recipient" class="transferir-view__selected">
+      <p
+        v-if="store.recipient"
+        class="transferir-view__selected"
+        data-testid="transferir-destinatario-selecionado"
+      >
         Destinatário selecionado: {{ store.recipient.name }} ({{
           store.recipient.pixKeyMasked
         }})
       </p>
 
-      <AppCurrencyInput v-model="amountModel" label="Valor (R$)" />
+      <AppCurrencyInput
+        v-model="amountModel"
+        label="Valor (R$)"
+        test-id="transferir-valor-input"
+      />
 
       <AppInput
         v-model="descriptionModel"
         label="Descrição (opcional)"
         autocomplete="off"
+        test-id="transferir-descricao-input"
       />
 
-      <p v-if="store.errorMessage" class="transferir-view__error" role="alert">
+      <p
+        v-if="store.errorMessage"
+        class="transferir-view__error"
+        role="alert"
+        data-testid="transferir-erro"
+      >
         {{ store.errorMessage }}
       </p>
 
-      <AppButton type="submit" :disabled="store.submitting">
+      <AppButton
+        type="submit"
+        :disabled="store.submitting"
+        data-testid="transferir-continuar-button"
+      >
         {{ store.submitting ? 'Continuando…' : 'Continuar' }}
       </AppButton>
     </form>
@@ -103,6 +126,7 @@ async function handleSubmit() {
           <button
             type="button"
             class="transferir-view__frequent-item"
+            :data-testid="`transferir-contato-${recipient.recipientId}`"
             @click="selectFrequent(recipient)"
           >
             <span>{{ recipient.name }}</span>

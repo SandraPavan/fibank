@@ -7,11 +7,14 @@ const props = withDefaults(
     type?: 'text' | 'email' | 'password';
     errorMessage?: string;
     autocomplete?: string;
+    /** Aplicado no `<input>` (não no wrapper) para seletores E2E. */
+    testId?: string;
   }>(),
   {
     type: 'text',
     errorMessage: undefined,
     autocomplete: undefined,
+    testId: undefined,
   },
 );
 
@@ -29,6 +32,7 @@ const errorId = useId();
       class="app-input__field"
       :type="type"
       :autocomplete="autocomplete"
+      :data-testid="props.testId"
       :aria-invalid="Boolean(props.errorMessage)"
       :aria-describedby="props.errorMessage ? errorId : undefined"
     />

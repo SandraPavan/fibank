@@ -49,35 +49,51 @@ function formatDate(iso: string | null): string {
 </script>
 
 <template>
-  <AppCard v-if="transaction" title="Comprovante">
+  <AppCard
+    v-if="transaction"
+    title="Comprovante"
+    data-testid="comprovante-card"
+  >
     <dl class="comprovante-view__details">
       <div>
         <dt>Favorecido</dt>
-        <dd>{{ transaction.recipientSnapshot.name }}</dd>
+        <dd data-testid="comprovante-favorecido">
+          {{ transaction.recipientSnapshot.name }}
+        </dd>
       </div>
       <div>
         <dt>Instituição</dt>
-        <dd>{{ transaction.recipientSnapshot.institution }}</dd>
+        <dd data-testid="comprovante-instituicao">
+          {{ transaction.recipientSnapshot.institution }}
+        </dd>
       </div>
       <div>
         <dt>Chave PIX</dt>
-        <dd>{{ transaction.recipientSnapshot.pixKeyMasked }}</dd>
+        <dd data-testid="comprovante-chave">
+          {{ transaction.recipientSnapshot.pixKeyMasked }}
+        </dd>
       </div>
       <div>
         <dt>Valor</dt>
-        <dd>{{ formatCents(transaction.amountCents) }}</dd>
+        <dd data-testid="comprovante-valor">
+          {{ formatCents(transaction.amountCents) }}
+        </dd>
       </div>
       <div>
         <dt>Data e hora</dt>
-        <dd>{{ formatDate(transaction.processedAt) }}</dd>
+        <dd data-testid="comprovante-data">
+          {{ formatDate(transaction.processedAt) }}
+        </dd>
       </div>
       <div>
         <dt>Identificador</dt>
-        <dd>{{ transaction.transactionId }}</dd>
+        <dd data-testid="comprovante-id">{{ transaction.transactionId }}</dd>
       </div>
       <div v-if="transaction.description">
         <dt>Descrição</dt>
-        <dd>{{ transaction.description }}</dd>
+        <dd data-testid="comprovante-descricao">
+          {{ transaction.description }}
+        </dd>
       </div>
     </dl>
   </AppCard>

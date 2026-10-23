@@ -35,31 +35,43 @@ function handleConfirm() {
 </script>
 
 <template>
-  <AppCard v-if="store.recipient" title="Revisar e confirmar">
+  <AppCard
+    v-if="store.recipient"
+    title="Revisar e confirmar"
+    data-testid="revisar-card"
+  >
     <dl class="revisar-view__details">
       <div>
         <dt>Nome</dt>
-        <dd>{{ store.recipient.name }}</dd>
+        <dd data-testid="revisar-nome">{{ store.recipient.name }}</dd>
       </div>
       <div>
         <dt>Instituição</dt>
-        <dd>{{ store.recipient.institution }}</dd>
+        <dd data-testid="revisar-instituicao">
+          {{ store.recipient.institution }}
+        </dd>
       </div>
       <div>
         <dt>Documento</dt>
-        <dd>{{ store.recipient.documentMasked }}</dd>
+        <dd data-testid="revisar-documento">
+          {{ store.recipient.documentMasked }}
+        </dd>
       </div>
       <div>
         <dt>Chave PIX</dt>
-        <dd>{{ store.recipient.pixKeyMasked }}</dd>
+        <dd data-testid="revisar-chave">
+          {{ store.recipient.pixKeyMasked }}
+        </dd>
       </div>
       <div>
         <dt>Valor a transferir</dt>
-        <dd>{{ formatCents(store.amountCents) }}</dd>
+        <dd data-testid="revisar-valor">
+          {{ formatCents(store.amountCents) }}
+        </dd>
       </div>
       <div v-if="store.description">
         <dt>Descrição</dt>
-        <dd>{{ store.description }}</dd>
+        <dd data-testid="revisar-descricao">{{ store.description }}</dd>
       </div>
     </dl>
 
@@ -69,10 +81,16 @@ function handleConfirm() {
     </p>
 
     <div class="revisar-view__actions">
-      <AppButton variant="secondary" @click="handleEdit">
+      <AppButton
+        variant="secondary"
+        data-testid="revisar-editar-button"
+        @click="handleEdit"
+      >
         Editar dados
       </AppButton>
-      <AppButton @click="handleConfirm"> Confirmar e pagar </AppButton>
+      <AppButton data-testid="revisar-confirmar-button" @click="handleConfirm">
+        Confirmar e pagar
+      </AppButton>
     </div>
   </AppCard>
 </template>
