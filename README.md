@@ -1,439 +1,293 @@
-# FinBank
+# FinBank — visão geral do projeto
 
-Fundação local do monorepo FinBank, composta por uma API NestJS, uma aplicação Vue 3 e contratos TypeScript compartilhados.
+O FinBank é um simulador bancário **fictício** de PIX, criado para o workshop
+TDC 2026 _"Estamos construindo qualidade ou apenas automatizando evidências?"_.
+Ele é pequeno o bastante para ser lido em uma sessão e realista o bastante para
+discutir decisões de produto, regras de negócio e estratégia de testes.
 
-## Pré-requisitos
+Este documento é a porta de entrada: explica o que o projeto faz, como ele
+funciona, onde encontrar cada parte e como ele é testado. Comandos detalhados,
+contratos HTTP e códigos de erro ficam na [referência técnica](docs/referencia-tecnica.md).
 
-- Para desenvolvimento e execução dos gates npm: Node.js exatamente na versão
-  24.15.0 e npm 11.9.0.
-- Para executar a stack pelos comandos `workshop:*`: Node.js/npm nas versões acima,
-  Docker Engine e Docker Compose. Os containers não exigem CLIs de framework nem
-  MongoDB instalados no host.
+> Todos os dados são fictícios (nomes, documentos, chaves PIX, senhas). O
+> projeto roda localmente e offline; nenhum serviço externo é necessário.
 
-Não é necessário instalar NestJS CLI, Vue CLI ou qualquer outra ferramenta globalmente.
+## Sumário
 
-## Instalação
+- [Primeiros passos](#primeiros-passos)
+- [Como funciona](#como-funciona)
+- [Regras de negócio](#regras-de-negócio)
+- [Telas](#telas)
+- [Mapa do projeto](#mapa-do-projeto)
+- [Estratégia de testes](#estratégia-de-testes)
+- [Relatórios de testes](#relatórios-de-testes)
+- [Ferramentas e versões](#ferramentas-e-versões)
+- [Outros guias desta pasta](#outros-guias-desta-pasta)
+
+## Primeiros passos
+
+Pré-requisitos: Node.js 24.15.0, npm 11.9.0 e Docker com Compose.
 
 ```bash
+cd finbank
 nvm use
 npm ci
-```
-
-## Validação
-
-Execute na raiz de `finbank/`:
-
-```bash
-npm run format:check
-npm run lint
-npm run typecheck
-npm test
-npm run build
-npm ls
-npm explain eslint
-npm explain glob
-npm explain whatwg-encoding
-npm audit
-```
-
-Os comandos usam somente as dependências fixadas no monorepo. `npm explain whatwg-encoding` deve informar que nenhuma dependência correspondente foi encontrada.
-
-`.env.example` registra somente valores locais fictícios. A execução direta da API usa
-`127.0.0.1` por padrão; no Compose, `API_HOST=0.0.0.0` permite o acesso somente pela
-rede interna dos containers. `API_PORT` e `MONGO_INIT_MAX_ATTEMPTS` também são
-consumidos pelo Compose e possuem defaults seguros; o número de tentativas deve ser um
-inteiro positivo.
-
-## Stack Docker local
-
-O launcher local executa sempre o arquivo `compose.yaml` desta instalação com o Compose
-project fixo `finbank`, mesmo quando o script é iniciado a partir de outro diretório.
-Ele valida Docker, Compose, daemon, configuração e conflito da porta antes de alterar a
-stack.
-
-Em `workshop:start` e `workshop:reset`, um conflito externo na porta bloqueia a
-operação. Em `workshop:stop`, essa verificação é apenas consultiva: uma falha ou conflito
-gera aviso, mas o encerramento seguro do project `finbank` continua.
-
-Inicie ou reconvirja todos os serviços e aguarde os healthchecks:
-
-```bash
 npm run workshop:start
 ```
 
-A aplicação fica disponível em `http://localhost:8080/` e a saúde técnica da API em
-`http://localhost:8080/api/health`. As URLs são mostradas pelo launcher somente quando
-MongoDB, API e web estão saudáveis e `mongo-init` concluiu com código zero. API e
-MongoDB não publicam portas no host.
+Abra `http://localhost:8080/`. Para parar sem perder dados, use
+`npm run workshop:stop`; para voltar ao estado inicial, `npm run workshop:reset`.
+Credenciais e cadastro de novos perfis estão em [acesso.md](docs/acesso.md).
 
-Consulte os estados sem alterar containers, redes ou volumes:
+## Como funciona
 
-```bash
-npm run workshop:status
+O FinBank é um monorepo npm com três workspaces, executado por Docker Compose
+atrás de um único gateway na porta 8080:
+
+```text
+Navegador
+  └─ Gateway :8080 (única porta exposta)
+       ├─ /            → SPA Vue 3 (apps/web)
+       ├─ /api/*       → API NestJS (apps/api)
+       ├─ /reports/*   → relatórios de testes (somente leitura)
+       └─ /facilitator → painel do facilitador (somente acesso local)
+                │
+                ▼
+          API NestJS (rede interna)
+                │  Prisma
+                ▼
+          MongoDB 8 — replica set de nó único "rs0" (rede interna)
 ```
 
-O status classifica cada serviço como saudável, concluído, parado, ausente ou falho e
-retorna código diferente de zero enquanto a stack não estiver pronta.
+| Workspace            | Papel                                                                          |
+| -------------------- | ------------------------------------------------------------------------------ |
+| `apps/api`           | Monólito modular NestJS: perfis, conta, destinatários, PIX, risco, histórico.  |
+| `apps/web`           | SPA Vue 3 (Composition API, Pinia, Vue Router) com o fluxo PIX e o histórico.  |
+| `packages/contracts` | Tipos TypeScript compartilhados entre API e web (DTOs), sem lógica de domínio. |
 
-Encerre somente o project `finbank`, preservando os volumes
-`finbank_mongo_data` e `finbank_mongo_config`:
+Decisões de arquitetura que vale conhecer:
 
-```bash
-npm run workshop:stop
+- **Monólito modular**, não microserviços — o foco é o domínio, não a
+  infraestrutura.
+- **REST/JSON** para facilitar a inspeção pelo navegador ou `curl`.
+- **MongoDB em replica set** para permitir as transações atômicas usadas pelo
+  Prisma (débito + registro da transação acontecem juntos ou não acontecem).
+- **API e MongoDB não publicam portas no host**: tudo passa pelo gateway.
+- **Workspaces de grupo**: no workshop, cada grupo entra por um link
+  `/join/<grupo>` e trabalha com dados isolados dos demais.
+
+A visão completa está em [`dev/02-arquitetura.md`](../dev/02-arquitetura.md).
+
+## Regras de negócio
+
+### Perfil e conta
+
+- O seed cria o perfil base `PRO-1001` / conta `ACC-1001` (Alex Exemplo),
+  com saldo de **R$ 145.250,00**, limite diário de **R$ 100.000,00** e senha
+  transacional `123456`.
+- Novos perfis podem ser cadastrados com nome (1–80 caracteres) e senha de seis
+  dígitos; cada um recebe uma conta própria com os mesmos saldo e limite
+  iniciais e histórico vazio.
+- A tela de login é **fictícia**: não há autenticação de usuário. A conta usada
+  em cada requisição é indicada pelo header `X-Local-Profile-Id`; sem ele, vale
+  o perfil base.
+- Senhas são guardadas apenas como hash (scrypt com salt); chaves PIX e
+  documentos aparecem sempre mascarados.
+
+### Fluxo de um PIX
+
+```text
+Intenção (DRAFT) ──► revisão/edição ──► confirmação com senha ──► decisão de risco
+   não debita           não debita        revalida tudo            APPROVED ou REVIEW
 ```
 
-Para descartar os dados locais do workshop, remover somente os recursos e volumes do
-project `finbank` e recriar uma stack saudável:
-
-```bash
-npm run workshop:reset
-```
-
-O reset é destrutivo para `finbank_mongo_data` e `finbank_mongo_config`: ambos são
-removidos e recriados pelo Compose. Ele não usa operações globais do Docker e não
-alcança recursos de outros Compose projects.
-
-## Smoke test Docker
-
-O smoke integrado usa apenas Docker, cria projeto, rede, dois volumes e porta
-temporários, valida a primeira subida e o reinício e remove somente esses recursos ao
-terminar. Ele não faz parte de `npm test` e nunca usa nem remove
-`finbank_mongo_data` ou `finbank_mongo_config`:
-
-```bash
-npm run test:docker
-```
-
-## Persistência local (DEV-010)
-
-A stack prepara o replica set `rs0`, aplica `prisma db push` e inicializa a
-baseline somente quando o perfil base ainda não existe. Reiniciar preserva os
-saldos e os cadastros locais. Prisma e client usam a versão exata `6.19.0`;
-não há migrações. O Mongo permanece acessível somente na rede Docker.
-
-Com a stack iniciada:
-
-```sh
-docker compose exec api npm run db:push --workspace @finbank/api
-docker compose exec api npm run db:seed --workspace @finbank/api
-docker compose exec -e WORKSHOP_MODE=true api npm run db:reset --workspace @finbank/api
-```
-
-`db:seed` restaura as fixtures base e preserva perfis adicionais, suas contas,
-intenções e transações. `db:reset` remove os dados dos cinco modelos e restaura a
-baseline, em transação; exige `WORKSHOP_MODE=true` e a conexão efetiva com database
-exatamente `finbank` ou `finbank_test`. Não apaga outras coleções nem databases.
-O launcher `workshop:reset` mantém seu comportamento de recriar somente os volumes
-próprios; a próxima inicialização restaura a baseline.
-
-A baseline usa `PRO-1001` / `ACC-1001`, nome fictício Alex Exemplo, saldo
-`14525000` e limite diário `10000000` centavos. A senha fictícia é `123456`,
-persistida somente como hash scrypt com salt aleatório. São dois destinatários
-fictícios (`marina@example.test` e `oficina@example.test`, somente hashes e máscaras
-no banco) e cinco transações com referência em 18/08/2026, America/Sao_Paulo.
-Hashes válidos existentes são preservados na reaplicação do seed.
-
-O cadastro interno aceita nome após trim de 1 a 80 caracteres e senha de seis
-dígitos; nomes podem se repetir. Cada perfil recebe uma conta exclusiva com os
-mesmos saldo e limite iniciais e histórico vazio. Cadastro/seleção, intenções e confirmação estão descritos nas seções DEV-011/012/020/021 abaixo. `requestId` não tem índice único.
-
-Para desenvolvimento, com Node/npm nas versões do projeto:
-
-```sh
-npm ci
-npm run prisma:generate --workspace @finbank/api
-npm run build
-npm run format:check
-npm run lint
-npm run typecheck
-npm test
-npm run test:docker
-```
-
-`test:docker` cria uma stack isolada com volumes próprios, testa o runtime com
-client/engines gerados, executa integração real de repositories, seed/reset em
-`finbank_test` e remove os volumes de teste ao terminar. Não publica Mongo no host.
-O teste de health HTTP usa PactumJS; os testes unitários independem de Mongo.
-
-## API de perfis, conta e destinatários (DEV-011)
-
-Com `npm run workshop:start`, use `http://localhost:8080/api/v1`.
-O cadastro local cria uma conta fictícia própria. A seleção identifica a conta
-por requisição; não é login nem garante privacidade entre pessoas com acesso à
-mesma instalação.
-
-```sh
-curl -s http://localhost:8080/api/v1/profiles
-curl -s http://localhost:8080/api/v1/profiles \
-  -H 'Content-Type: application/json' \
-  -d '{"displayName":"Pessoa Exemplo","transactionPassword":"012345"}'
-```
-
-POST retorna 201 e `{profileId, displayName, accountId}`; GET retorna um array
-ordenado por `profileId`. O nome é normalizado com trim, aceita 1–80 caracteres
-e pode se repetir. A senha é uma string de seis dígitos. Campos adicionais,
-inclusive `workspaceId`, são rejeitados com 400 (`INVALID_PROFILE_INPUT`).
-
-Copie o `profileId` retornado para selecionar a conta:
-
-```sh
-curl -s http://localhost:8080/api/v1/accounts/me \
-  -H 'X-Local-Profile-Id: PRO-ID-RETORNADO'
-curl -s http://localhost:8080/api/v1/accounts/me
-```
-
-Sem header, usa o perfil base `PRO-1001`. Header vazio, repetido ou malformado
-retorna 400 (`INVALID_LOCAL_PROFILE`); ID válido inexistente retorna 404
-(`LOCAL_PROFILE_NOT_FOUND`). IDs seguem `PRO-` e caracteres alfanuméricos/hífens.
-A conta retorna somente `accountId`, `profileId`, `ownerName`, `documentMasked`,
-`balanceCents` e `dailyLimitCents`; valores monetários são inteiros em centavos.
-
-```sh
-curl -sG http://localhost:8080/api/v1/recipients/resolve \
-  --data-urlencode 'key=marina@example.test'
-curl -s http://localhost:8080/api/v1/recipients/frequent
-```
-
-As fixtures usam chaves de email fictícias. Chave ausente, repetida ou malformada
-retorna 400 (`INVALID_PIX_KEY`); email válido sem cadastro retorna 404
-(`RECIPIENT_NOT_FOUND`). Destinatários retornam somente `recipientId`, `name`,
-`pixKeyMasked`, `documentMasked` e `institution`. A listagem de perfis e contatos
-é local e não exige seleção de conta.
-
-Erros usam `application/problem+json`, com `type`, `title`, `status`, `code`,
-`detail`, `requestId` e `traceId`. Falhas inesperadas retornam 500
-(`PROCESSING_ERROR`), sem detalhes internos. O parser da API retorna 413
-(`PAYLOAD_TOO_LARGE`) para JSON acima de 100 KiB e 415
-(`UNSUPPORTED_MEDIA_TYPE`) para charset ou codificação incompatível, usando
-o mesmo envelope seguro. Senhas, hashes, chaves completas e
-IDs físicos do Mongo não integram os DTOs. O gateway não registra URLs da API,
-que podem conter chaves nas consultas.
-
-`npm run test:docker` verifica cadastro, seleção, conta e destinatários pelo
-gateway e executa PactumJS com MongoDB real em `finbank_test`. Arquivos de teste
-que restauram esse banco executam sequencialmente. Intenções, confirmação PIX e
-histórico HTTP estão descritos abaixo. Telas funcionais pertencem ao G3.
-
-## Intenções PIX (DEV-012)
-
-A intenção prepara um pagamento e permite revisão antes da autenticação.
-Criar ou editar não debita nem reserva saldo, não consome limite e não cria
-transação. Selecione o perfil com o mesmo header da consulta de conta:
-
-```sh
-curl -s http://localhost:8080/api/v1/pix/intents \
-  -H 'Content-Type: application/json' \
-  -H 'X-Local-Profile-Id: PRO-ID-RETORNADO' \
-  -d '{"requestId":"REQ-EXEMPLO-1","recipientId":"REC-1001","amountCents":5000,"deviceId":"DEV-EXEMPLO","description":"Pagamento fictício"}'
-curl -s http://localhost:8080/api/v1/pix/intents/REQ-EXEMPLO-1 \
-  -H 'X-Local-Profile-Id: PRO-ID-RETORNADO'
-curl -s -X PATCH http://localhost:8080/api/v1/pix/intents/REQ-EXEMPLO-1 \
-  -H 'Content-Type: application/json' \
-  -H 'X-Local-Profile-Id: PRO-ID-RETORNADO' \
-  -d '{"amountCents":6000,"description":"Descrição revisada"}'
-```
-
-POST retorna 201; GET/PATCH retornam 200. O DTO contém `requestId`, `accountId`,
-`recipientId`, `amountCents`, `description`, `deviceId`, `state`, `createdAt` e
-`expiresAt`. Datas são ISO; a intenção nasce em `DRAFT`, com validade de cinco
-minutos. A consulta continua disponível após expirar, mas a edição exige
-validade e estado anterior ao processamento (`DRAFT` ou `AUTH_PENDING`).
-
-O valor é um inteiro positivo em centavos, limitado ao Int32 do armazenamento.
-`requestId`, `recipientId` e `deviceId` usam prefixos `REQ-`, `REC-` e `DEV-`,
-respectivamente, com caracteres alfanuméricos/hífens e até 100 caracteres.
-Descrição é opcional no cadastro (padrão vazio), string com até 140 caracteres.
-PATCH aceita um ou mais entre `recipientId`, `amountCents`, `description` e
-`deviceId`; preserva identificador, conta, datas e estado.
-
-A soma de transações `APPROVED` da conta no dia civil de America/Sao_Paulo,
-mais o valor da intenção, pode ser igual ao limite diário. O dia da transação
-usa `processedAt`, com `createdAt` quando aquela data está ausente. Outros
-estados, dias e contas não entram na soma. Saldo também é validado em cada
-criação/edição; nenhuma dessas consultas garante saldo para confirmação futura.
-
-Erros funcionais seguem `application/problem+json`:
-
-- 400 `INVALID_PIX_INTENT`: campos ou valores inválidos.
-- 422 `INSUFFICIENT_BALANCE` ou `DAILY_LIMIT_EXCEEDED`.
-- 404 `RECIPIENT_NOT_FOUND` ou `PIX_INTENT_NOT_FOUND`; intenção de outra conta
-  recebe o mesmo erro de uma intenção ausente.
-- 410 `PIX_INTENT_EXPIRED`; 409 `PIX_INTENT_NOT_EDITABLE`.
-
-Autenticação, confirmação, débito e avaliação de risco estão descritos abaixo. O smoke Docker cobre criação, leitura e edição pelo gateway; a
-integração com Mongo real cobre limites inclusivos e ausência de efeitos.
-
-## Confirmação PIX e risco (DEV-020/021)
-
-Após revisar uma intenção válida, confirme com a senha transacional do perfil:
-
-```sh
-curl -s http://localhost:8080/api/v1/pix/intents/REQ-EXEMPLO-1/confirm \
-  -H 'Content-Type: application/json' \
-  -H 'X-Local-Profile-Id: PRO-ID-RETORNADO' \
-  -d '{"transactionPassword":"012345"}'
-```
-
-O corpo aceita somente `transactionPassword`; valor, conta e destinatário são
-relidos da intenção. A senha é verificada contra o hash da conta selecionada.
-Senha ausente, malformada ou incorreta retorna 422
-`INVALID_TRANSACTION_PASSWORD`, sem alterar intenção ou dados financeiros.
-Corpo inválido ou campos extras retornam 400 `INVALID_PIX_CONFIRMATION`.
-
-A confirmação revalida validade, estado, destinatário, saldo e limite diário.
-Intenção de outra conta retorna 404 `PIX_INTENT_NOT_FOUND`; expirada retorna 410
-`PIX_INTENT_EXPIRED`; estado que não admite confirmação retorna 409
-`PIX_INTENT_NOT_CONFIRMABLE`. Saldo/limite insuficientes retornam os mesmos erros
-422 da preparação. Erros seguem o envelope seguro `application/problem+json`.
-
-Após as validações, o avaliador obrigatório usa somente o valor atual e a
-configuração `PIX_REVIEW_AMOUNT_CENTS`. Configure em `.env` um inteiro positivo
-seguro em centavos; ausência usa `500000` (R$ 5.000,00). Valor presente vazio,
-fracionário, negativo ou inválido impede inicialização. O Compose encaminha a
-configuração para a API, inclusive valores vazios para validação.
-
-- Abaixo do limiar: HTTP 200, `APPROVED`, `[WITHIN_CURRENT_RULES]` e débito exato.
-- No limiar ou acima: HTTP 202, `REVIEW`, `[AMOUNT_REQUIRES_REVIEW]`, sem débito
-  nem reserva de saldo; não consome limite diário.
-
-A resposta contém somente `requestId`, `transactionId`, `status`, `reasonCodes`
-e `processedAt` ISO. Em REVIEW, esse instante registra a decisão, não liquidação.
-Transação, snapshot mascarado, estado final e eventual débito são persistidos
-atomicamente no MongoDB. Falha do avaliador ou entre gravações desfaz a operação
-inteira e retorna `500 PROCESSING_ERROR`. O score interno não é exposto em
-respostas ou logs. Histórico está disponível por porta injetável sem alterar o
-risco; aprovações do dia de São Paulo continuam compondo o limite diário.
-
-Não há resolução de REVIEW, análise comportamental ou idempotência robusta.
-O smoke Docker verifica aprovação e revisão pelo gateway com saldo e
-persistência reais; integração Mongo cobre igualdade, adjacências e rollback.
-
-### Histórico e detalhe de transações
-
-`GET /api/v1/transactions` consulta somente a conta selecionada por
-`X-Local-Profile-Id` (ausente: perfil base). A resposta contém `items`, `page`,
-`pageSize`, `totalItems` e `totalPages`. Ordenação: `createdAt` decrescente,
-desempate por `transactionId` crescente. Contagens consideram todos os filtros;
-página além do fim retorna lista vazia, mantendo as contagens reais.
-
-- `page`: inteiro positivo, padrão 1; `pageSize`: 1 a 100, padrão 20.
-- `from` e `to`: datas de calendário `YYYY-MM-DD`, inclusivas em
-  `America/Sao_Paulo`, sobre `createdAt`. Cada limite pode ser usado sozinho.
-- `status`: `APPROVED`, `REVIEW`, `REJECTED` ou `FAILED`; `type`: somente `PIX`.
-- `search`: substring literal sem distinção de maiúsculas em `transactionId`,
-  `requestId` e nome do snapshot do destinatário; trim e máximo 100 caracteres.
-
-Filtros opcionais vazios equivalem à ausência; `page`/`pageSize` vazios,
-parâmetros desconhecidos, repetidos, estruturados e offsets inseguros retornam
-`400 INVALID_TRANSACTION_QUERY`. Exemplo:
-`http://localhost:8080/api/v1/transactions?from=2026-08-18&status=APPROVED&pageSize=2`.
-
-`GET /api/v1/transactions/:transactionId` retorna a mesma projeção dos itens:
-identificadores da transação e requisição, tipo PIX, snapshot mascarado,
-valor em centavos, descrição, status, reasonCodes e datas ISO. `processedAt`
-preserva `null`. A consulta mantém o snapshot e a decisão persistidos.
-Transação inexistente ou de outra conta retorna `404 TRANSACTION_NOT_FOUND`.
-Falhas de banco usam `500 PROCESSING_ERROR`, sem detalhes internos.
-
-### Relatórios dos testes
-
-Os comandos existentes agora preservam resultados em `reports/`:
-
-- `npm test`: `reports/unit/summary.md`, `summary.json`, logs e JUnit XML de
-  API (`api.xml`), web (`web.xml`), contratos (`contracts.xml`) e fundação/launcher
-  (`foundation.xml`).
-- `npm run test:docker`: `reports/docker/summary.md`, `summary.json`, `smoke.log`
-  e `api-integration.xml` com os resultados Pactum/Vitest no Mongo real.
-
-Os logs continuam aparecendo no terminal. Cada comando substitui somente seus
-próprios relatórios anteriores e preserva código de saída de falha; suítes não
-executadas não deixam XML antigo parecendo resultado novo. Se o Docker falhar
-antes da integração, o resumo e o log registram a falha sem inventar um XML.
-O relatório de integração é gravado no host por bind mount antes da remoção do
-container. Execuções simultâneas do mesmo comando devem usar checkouts separados.
-
-JUnit é compatível com leitores de resultados de CI. Estes relatórios registram
-execução de testes; não incluem medição de cobertura de código. `reports/` fica
-fora do Git, da formatação e do contexto de build Docker.
-
-## Testes E2E (DEV-041)
-
-A suíte pública Cypress (`apps/web/cypress/e2e`) cobre os quatro cenários de
-`dev/06-estrategia-de-testes.md`: login → PIX aprovado → comprovante →
-histórico; valor inválido não avança; valor alto entra em análise; senha
-incorreta não processa. Unitário e integração/API continuam nas seções
-"Validação" e "Smoke test Docker" acima; esta seção cobre só o E2E, novo
-nesta história.
-
-A suíte roda contra a aplicação servida via HTTP de verdade (não em memória),
-então exige a stack Docker de pé:
-
-```sh
-npm run workshop:start
-npm run test:e2e --workspace apps/web
-npm run workshop:stop
-```
-
-`test:e2e` aponta por padrão para `http://localhost:8080` (mesma URL do
-launcher). Para rodar contra outro ambiente (ex.: `npm run dev` local nas duas
-apps), sobrescreva com a variável de ambiente nativa do Cypress:
-
-```sh
-CYPRESS_BASE_URL=http://localhost:5173 npm run test:e2e --workspace apps/web
-```
-
-Para depurar interativamente com a interface do Cypress:
-
-```sh
-npx cypress open --project apps/web
-```
-
-Cada teste chama `cy.resetWorkshop()` (`POST /api/v1/simulation/reset`, do
-`SimulationModule` da DEV-040) antes de rodar, restaurando as fixtures base —
-a ordem de execução não importa e reexecuções não acumulam estado.
-
-Para localizar elementos, prefira `cy.getByTestId('<id>')`. A convenção de
-nomes, como adicionar `data-testid` em telas e componentes novos e o catálogo
-dos IDs existentes estão em [`docs/seletores-e2e.md`](docs/seletores-e2e.md).
-
-`cypress run` precisa de um navegador real. Em ambientes sem GUI utilizável
-o binário padrão (Electron embutido) pode falhar ao iniciar; nesse caso tente
-`npx cypress run --browser chrome --project apps/web` com o Google Chrome
-instalado, ou rode em uma máquina/CI com navegador disponível.
-
-## Testes reservados do facilitador (DEV-042)
-
-A suíte reservada (`facilitator/tests/{characterization,target}`) prova cada
-um dos seis riscos didáticos RISK-01–RISK-06
-(`dev/05-controle-didatico.md`, `dev/06-estrategia-de-testes.md`) contra a
-API real. Nunca roda dentro de `npm test` nem é required check da CI
-pública (`dev/08-docker-e-pipeline.md`).
-
-- `characterization/`: prova o incidente como ele existe hoje no baseline —
-  deve ficar verde.
-- `target/`: descreve a correção pós-G5 (DEV-100–103) — falha por desenho
-  até essas histórias serem implementadas.
-
-Como `test:integration`, exige MongoDB com replica set real; API e MongoDB
-não publicam portas no host, então a suíte roda dentro de um container Linux
-na mesma rede do Compose (`finbank_backend`, nome fixo — não muda com
-`COMPOSE_PROJECT_NAME`):
-
-```sh
-npm run workshop:start
-docker build --target build -f apps/api/Dockerfile -t finbank-facilitator .
-docker run --rm \
-  --network finbank_backend \
-  -v "$PWD/facilitator:/app/facilitator" \
-  -e DATABASE_URL="mongodb://mongo:27017/finbank_test?replicaSet=rs0" \
-  -e WORKSHOP_MODE=true \
-  finbank-facilitator \
-  npm run test:workshop-risks
-docker image rm finbank-facilitator
-npm run workshop:stop
-```
-
-Troque o último comando por `npm run test:workshop-risks:target` para rodar
-a pasta `target` — as falhas são esperadas; cada mensagem de asserção
-documenta a lacuna e a DEV-alvo (ex.: `expected 409 to be 200` no RISK-02,
-alvo DEV-100).
+1. **Intenção**: prepara o pagamento (destinatário, valor, descrição,
+   dispositivo). Nasce em `DRAFT`, vale por **cinco minutos** e **não** debita,
+   reserva saldo nem consome limite.
+2. **Revisão**: a intenção pode ser editada enquanto estiver válida e ainda não
+   processada.
+3. **Confirmação**: exige a senha transacional da conta. Validade, estado,
+   destinatário, saldo e limite são verificados de novo nesse momento.
+4. **Decisão de risco**: compara o valor da transação com o limiar
+   `PIX_REVIEW_AMOUNT_CENTS` (padrão **R$ 5.000,00**):
+   - abaixo do limiar → `APPROVED`, com débito imediato do valor;
+   - no limiar ou acima → `REVIEW` (em análise), sem débito.
+
+### Validações
+
+- Valores são sempre **inteiros em centavos** e precisam ser positivos.
+- **Saldo**: o valor não pode ultrapassar o saldo da conta.
+- **Limite diário**: soma das transações `APPROVED` do dia civil em
+  `America/Sao_Paulo` + valor atual pode chegar exatamente ao limite, nunca
+  passar dele. Transações em `REVIEW` não consomem limite.
+- Senha incorreta não altera a intenção nem os dados financeiros.
+
+### Histórico
+
+- Lista só as transações da conta selecionada, mais recentes primeiro, com
+  paginação (`page`, `pageSize` até 100).
+- Filtros por período (`from`/`to`), status e busca textual por identificador
+  ou nome do destinatário.
+- Status possíveis: `APPROVED`, `REVIEW`, `REJECTED` e `FAILED`.
+
+### Erros
+
+Todos os erros da API seguem o formato `application/problem+json`, com `code`,
+`detail`, `requestId` e `traceId`. Falhas inesperadas retornam
+`500 PROCESSING_ERROR` sem expor detalhes internos. O catálogo completo de
+códigos está na [referência técnica](docs/referencia-tecnica.md).
+
+Especificações de domínio e fluxos:
+[`dev/03-dominio-e-api.md`](../dev/03-dominio-e-api.md),
+[`dev/04-fluxos.md`](../dev/04-fluxos.md) e as features em
+[`features/`](features/).
+
+## Telas
+
+| ID  | Rota                   | Tela                                                  | Arquivo                                                         |
+| --- | ---------------------- | ----------------------------------------------------- | --------------------------------------------------------------- |
+| —   | `/login`               | Login fictício                                        | [`LoginView.vue`](apps/web/src/views/LoginView.vue)             |
+| T01 | `/app/transferir`      | Destinatário, valor e descrição; contatos frequentes  | [`TransferirView.vue`](apps/web/src/views/TransferirView.vue)   |
+| T02 | `/app/revisar`         | Revisão e edição antes de confirmar                   | [`RevisarView.vue`](apps/web/src/views/RevisarView.vue)         |
+| T03 | `/app/senha`           | Senha transacional de seis dígitos (teclado numérico) | [`SenhaView.vue`](apps/web/src/views/SenhaView.vue)             |
+| T04 | `/app/comprovante/:id` | Comprovante (aprovado ou em análise)                  | [`ComprovanteView.vue`](apps/web/src/views/ComprovanteView.vue) |
+| T05 | `/app/erro`            | Erro                                                  | [`ErroView.vue`](apps/web/src/views/ErroView.vue)               |
+| T06 | `/app/historico`       | Histórico com filtros e busca                         | [`HistoricoView.vue`](apps/web/src/views/HistoricoView.vue)     |
+| —   | `/app/relatorios`      | Relatórios de testes publicados                       | [`RelatoriosView.vue`](apps/web/src/views/RelatoriosView.vue)   |
+
+## Mapa do projeto
+
+Onde olhar para entender cada parte:
+
+| Quero entender…                      | Olhe em                                                                                                                      |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| Criação e edição de intenções PIX    | [`apps/api/src/pix/pix-intent.domain.ts`](apps/api/src/pix/pix-intent.domain.ts), `pix-intent.service.ts`                    |
+| Confirmação, senha e débito          | [`apps/api/src/pix/pix-confirmation.service.ts`](apps/api/src/pix/pix-confirmation.service.ts)                               |
+| Regra de risco e limiar de análise   | [`apps/api/src/pix/pix-risk.domain.ts`](apps/api/src/pix/pix-risk.domain.ts), `pix-risk.config.ts`                           |
+| Histórico, filtros e paginação       | [`apps/api/src/transactions/`](apps/api/src/transactions/)                                                                   |
+| Perfis, conta e destinatários        | [`apps/api/src/http/local-banking.service.ts`](apps/api/src/http/local-banking.service.ts)                                   |
+| Formato padrão de erros              | [`apps/api/src/http/problem.ts`](apps/api/src/http/problem.ts)                                                               |
+| Acesso a dados                       | [`apps/api/src/repositories/`](apps/api/src/repositories/), [`apps/api/prisma/schema.prisma`](apps/api/prisma/schema.prisma) |
+| Dados iniciais (seed)                | [`apps/api/src/database/fixtures.ts`](apps/api/src/database/fixtures.ts), `seed.ts`                                          |
+| Reset do ambiente usado pelos testes | [`apps/api/src/simulation/`](apps/api/src/simulation/)                                                                       |
+| Estado do fluxo PIX no frontend      | [`apps/web/src/stores/pixTransfer.ts`](apps/web/src/stores/pixTransfer.ts)                                                   |
+| Chamadas HTTP do frontend            | [`apps/web/src/api/`](apps/web/src/api/)                                                                                     |
+| Componentes visuais (design system)  | [`apps/web/src/components/`](apps/web/src/components/)                                                                       |
+| Formatação de moeda                  | [`apps/web/src/lib/currency.ts`](apps/web/src/lib/currency.ts)                                                               |
+| Rotas                                | [`apps/web/src/router.ts`](apps/web/src/router.ts)                                                                           |
+| Tipos compartilhados (DTOs)          | [`packages/contracts/src/index.ts`](packages/contracts/src/index.ts)                                                         |
+| Serviços Docker                      | [`compose.yaml`](compose.yaml)                                                                                               |
+| Launcher `workshop:*`                | [`scripts/workshop.mjs`](scripts/workshop.mjs)                                                                               |
+| Geração de relatórios                | [`scripts/test-reports.mjs`](scripts/test-reports.mjs), [`scripts/reports-index.mjs`](scripts/reports-index.mjs)             |
+| Escopo, princípios e backlog         | [`dev/`](../dev/) — em especial `01-escopo-e-principios.md` e `09-backlog.md`                                                |
+
+## Estratégia de testes
+
+### A pergunta do workshop
+
+O projeto tem testes em todas as camadas, e a suíte pública fica verde. A
+proposta é justamente olhar para isso com olhar crítico: **cobertura e testes
+passando são evidências, não garantia de qualidade**. Ao ler os relatórios,
+pergunte-se:
+
+- Que comportamento este teste realmente prova?
+- Que cenário de uso real ele não exercita?
+- Se esse teste continuar verde, que tipo de problema ainda poderia chegar ao
+  cliente?
+
+Compare o que os relatórios dizem com o que você observa usando a aplicação.
+
+### Pirâmide de testes
+
+| Nível                     | Ferramentas                     | O que cobre                                                                                                     | Onde fica                                          | Como rodar                                   |
+| ------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | -------------------------------------------- |
+| Unitário backend          | Vitest                          | Regras de domínio e serviços isolados, com repositories substituídos por dublês. Sem Nest, Prisma ou Mongo.     | [`apps/api/test/*.test.ts`](apps/api/test/)        | `npm run test:unit:backend` (ou `npm test`)  |
+| Integração / API          | PactumJS + Vitest               | Endpoints HTTP reais da API NestJS com MongoDB de teste (`finbank_test`): contratos, persistência, atomicidade. | [`apps/api/test/*.integration.ts`](apps/api/test/) | `npm run test:docker`                        |
+| Unitário / componente web | Vitest + Vue Test Utils + jsdom | Componentes, telas, store Pinia, formatação de moeda e mapeamento de estados.                                   | [`apps/web/test/`](apps/web/test/)                 | `npm run test:unit:frontend` (ou `npm test`) |
+| E2E do sistema            | Cypress                         | Fluxos completos no navegador, atravessando Vue, NestJS e MongoDB.                                              | [`apps/web/cypress/e2e/`](apps/web/cypress/e2e/)   | `npm run test:e2e` (stack no ar)             |
+| Fundação e smoke Docker   | `node:test`, shell              | Launcher, estrutura do monorepo, subida e reinício da stack em ambiente isolado.                                | [`test/`](test/)                                   | `npm test` / `npm run test:docker`           |
+
+Os quatro cenários E2E públicos são:
+
+1. login → PIX aprovado → comprovante → histórico;
+2. valor inválido não avança;
+3. valor alto entra em análise;
+4. senha incorreta não processa.
+
+### Por que cada ferramenta
+
+- **Vitest** é usado nos testes unitários de backend e frontend: rápido, nativo
+  para TypeScript/ESM e com a mesma API nas duas pontas. Testes unitários
+  respondem "a regra está certa?" sem depender de banco ou rede.
+- **Vue Test Utils + jsdom** montam componentes Vue fora do navegador para
+  verificar renderização, eventos e estados de tela.
+- **PactumJS** faz requisições HTTP reais contra a API rodando com MongoDB de
+  teste. Responde "o contrato HTTP e a persistência funcionam juntos?". Cada
+  suíte restaura o banco antes de rodar, então os testes são independentes.
+- **Cypress** é o único nível E2E e valida a experiência como o cliente a vê.
+  Não existe uma suíte E2E só do backend: a API termina nos testes de
+  integração.
+
+> Nota: [`dev/06-estrategia-de-testes.md`](../dev/06-estrategia-de-testes.md)
+> menciona Jest para os testes unitários do backend. Na implementação atual,
+> todos os testes JavaScript/TypeScript usam Vitest.
+
+### Convenções úteis
+
+- **Seletores E2E**: elementos usados pela automação têm `data-testid` no
+  formato `<tela>-<elemento>[-<tipo>]`; no Cypress, use
+  `cy.getByTestId('<id>')`. Guia completo em
+  [seletores-e2e.md](docs/seletores-e2e.md).
+- **Estado limpo**: cada teste E2E chama `cy.resetWorkshop()`, que restaura as
+  fixtures base pela API de simulação; a ordem dos testes não importa.
+- **Qualidade estática**: além dos testes, `npm run format:check` (Prettier),
+  `npm run lint` (ESLint) e `npm run typecheck` (`tsc`/`vue-tsc`) fazem parte
+  da validação.
+- **Suíte reservada**: existe uma suíte do facilitador, executada por comando
+  próprio e fora de `npm test` e da CI pública.
+
+Estratégia completa:
+[`dev/06-estrategia-de-testes.md`](../dev/06-estrategia-de-testes.md).
+
+## Relatórios de testes
+
+Há dois conjuntos de relatórios, ambos fora do Git:
+
+- **`reports/`** — gerado por `npm test` e `npm run test:docker`: resumo em
+  Markdown/JSON, logs e JUnit XML por suíte.
+- **`artifacts/test-reports/`** — gerado por `npm run reports:build` (unitário
+  backend, unitário frontend, integração API e E2E) e publicado em
+  `http://localhost:8080/reports/`, somente leitura.
+
+Os relatórios registram resultados de execução; cobertura de código é medida
+separadamente e, de novo, deve ser lida como evidência e não como veredito.
+Detalhes em [relatorios.md](docs/relatorios.md).
+
+## Ferramentas e versões
+
+As versões são fixadas nos `package.json` e em `.nvmrc`.
+
+| Área           | Ferramenta               | Versão                 |
+| -------------- | ------------------------ | ---------------------- |
+| Runtime        | Node.js / npm            | 24.15.0 / 11.9.0       |
+| Linguagem      | TypeScript               | 5.9.2                  |
+| Backend        | NestJS                   | 11.2.3                 |
+| Persistência   | Prisma / MongoDB         | 6.19.0 / 8.0.16        |
+| Frontend       | Vue / Pinia / Vue Router | 3.5.21 / 3.0.3 / 4.5.1 |
+| Build frontend | Vite                     | 7.3.6                  |
+| Testes         | Vitest                   | 3.2.7                  |
+| Testes         | Vue Test Utils / jsdom   | 2.5.0 / 29.0.0         |
+| Testes         | PactumJS                 | 3.8.0                  |
+| Testes         | Cypress                  | 16.1.0                 |
+| Qualidade      | ESLint / Prettier        | 10.9.1 / 3.6.2         |
+| Execução local | Docker Compose           | —                      |
+
+## Outros guias desta pasta
+
+| Guia                                                | Assunto                                                           |
+| --------------------------------------------------- | ----------------------------------------------------------------- |
+| [referencia-tecnica.md](docs/referencia-tecnica.md) | Comandos, contratos HTTP, códigos de erro e detalhes de cada DEV. |
+| [acesso.md](docs/acesso.md)                         | Usuário padrão, cadastro de perfis e acesso ao painel.            |
+| [relatorios.md](docs/relatorios.md)                 | Como gerar e publicar os relatórios de testes.                    |
+| [seletores-e2e.md](docs/seletores-e2e.md)           | Convenção e catálogo de `data-testid`.                            |
+| [ngrok.md](docs/ngrok.md)                           | Expor o app temporariamente para acesso remoto (opcional).        |
